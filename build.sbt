@@ -3,6 +3,7 @@ name := "ieps-crawler"
 version := "0.1"
 
 scalaVersion := "2.12.8"
+scalacOptions += "-Ypartial-unification" // 2.11.9+
 
 lazy val root = (project in file("."))
   .settings(
@@ -14,5 +15,6 @@ lazy val root = (project in file("."))
       "com.typesafe.akka" %% "akka-testkit" % "2.5.21" % Test,
       "org.tpolecat" %% "doobie-core"      % "0.6.0",
       "org.tpolecat" %% "doobie-postgres"  % "0.6.0", // Postgres driver 42.2.5 + type mappings.
+      "org.tpolecat" %% "doobie-specs2"    % "0.6.0"
     )
   )
