@@ -1,0 +1,11 @@
+target/
+*.sc
+.classpath
+.project
+.cache
+.settings/org.scala-ide.sdt.core.prefs
+.worksheet/
+config/log4j.properties
+config/spark-defaults.conf
+.idea/
+.settings/
