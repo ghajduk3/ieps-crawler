@@ -51,7 +51,23 @@ slickCodegenJdbcDriver := "org.postgresql.Driver"
 slickCodegenOutputPackage := "com.ieps.crawler.db"
 
 // optional, pass your own custom source code generator
-slickCodegenCodeGenerator := { model: m.Model => new SourceCodeGenerator(model) }
+slickCodegenCodeGenerator := { model: m.Model =>
+  new SourceCodeGenerator(model) {
+    override def code =
+      "import org.joda.time.DateTime\n" +
+      "import com.github.tototoshi.slick.PostgresJodaSupport._\n" + super.code
+
+    override def Table = new Table(_) {
+      override def Column = new Column(_) {
+        override def rawType = model.tpe match {
+          case "java.sql.Timestamp" => "DateTime"
+          case _ => super.rawType
+        }
+      }
+    }
+  }
+
+}
 
 // optional
 // For example of all the tables in a database we only would like to take table named "users"
