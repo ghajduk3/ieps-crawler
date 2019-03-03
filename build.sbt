@@ -23,14 +23,43 @@ lazy val root = (project in file("."))
     )
   )
 
-//lazy val slick = TaskKey[Seq[File]]("gen-tables")
-//lazy val slickCodeGenTask = (sourceManaged, dependencyClasspath in Compile, runner in Compile, streams) map { (dir, cp, r, s) =>
-//  val outputDir = (dir / "slick").getPath // place generated files in sbt's managed sources folder
-//  val url = "jdbc:h2:mem:test;INIT=runscript from 'src/main/sql/create.sql'" // connection info for a pre-populated throw-away, in-memory db for this demo, which is freshly initialized on every run
-//  val jdbcDriver = "org.h2.Driver"
-//  val slickDriver = "slick.driver.H2Driver"
-//  val pkg = "demo"
-//  toError(r.run("slick.codegen.SourceCodeGenerator", cp.files, Array(slickDriver, jdbcDriver, url, outputDir, pkg), s.log))
-//  val fname = outputDir + "/demo/Tables.scala"
-//  Seq(file(fname))
-//}
+import slick.codegen.SourceCodeGenerator
+import slick.{ model => m }
+// required
+enablePlugins(CodegenPlugin)
+
+// required
+// Register codegen hook
+sourceGenerators in Compile += slickCodegen
+
+// required
+slickCodegenDatabaseUrl := "jdbc:postgresql://localhost/crawldb"
+
+// required
+slickCodegenDatabaseUser := "postgres"
+
+// required
+slickCodegenDatabasePassword := ""
+
+// required (If not set, postgresql driver is choosen)
+slickCodegenDriver := slick.jdbc.PostgresProfile
+
+// required (If not set, postgresql driver is choosen)
+slickCodegenJdbcDriver := "org.postgresql.Driver"
+
+// optional but maybe you want
+slickCodegenOutputPackage := "com.ieps.crawler.db"
+
+// optional, pass your own custom source code generator
+slickCodegenCodeGenerator := { model: m.Model => new SourceCodeGenerator(model) }
+
+// optional
+// For example of all the tables in a database we only would like to take table named "users"
+//slickCodegenIncludedTables in Compile := Seq("users")
+
+// optional
+// For example, to exclude flyway's schema_version table from the target of codegen. This still applies after slickCodegenIncludedTables.
+//slickCodegenExcludedTables in Compile := Seq("schema_version")
+
+//optional
+//slickCodegenOutputDir := (sourceManaged in Compile).value
