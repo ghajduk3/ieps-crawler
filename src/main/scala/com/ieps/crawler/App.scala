@@ -8,5 +8,8 @@ object App extends StrictLogging {
     val pojo: JavaExperiment = new JavaExperiment(1,2)
     logger.info(s"This is the pojo: $pojo")
     logger.info(s"This is a major change")
+
+    // TODO: initialize the frontier
+    
   }
 }
