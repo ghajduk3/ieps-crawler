@@ -1,6 +1,5 @@
 package com.ieps.crawler.db
 
-import com.ieps.crawler.db
 import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.duration._
@@ -63,6 +62,7 @@ class DBService(dbConfig: String) {
   def linkPages(fromPage: PageRow, toPage: PageRow): LinkRow =
     Await.result(linkPagesFuture(fromPage, toPage), timeout)
 
+  // bulk read
   def getPageLinksFuture(id: Int): Future[(Option[PageRow], Seq[PageRow])] =
     db.run(CrawlerDIO.getPageLinksById(id))
 

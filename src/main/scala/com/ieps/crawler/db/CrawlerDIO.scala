@@ -1,7 +1,5 @@
 package com.ieps.crawler.db
 
-import com.ieps.crawler.db
-import com.ieps.crawler.db.CrawlerDIO.Query.{writePage, writeSite}
 import com.ieps.crawler.db.Tables._
 import slick.dbio.DBIO
 import slick.jdbc.PostgresProfile.api._
@@ -63,7 +61,7 @@ object CrawlerDIO {
    pageDatum: Seq[PageDataRow]
   ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
     for {
-      insertedPage <- insertPage(page)
+      insertedPage <- insertPage(page) // TODO: make this insertOrUpdate
       insertedImages <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id))))
       insertedPageData <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id))))
     } yield(insertedPage, insertedImages, insertedPageData)
