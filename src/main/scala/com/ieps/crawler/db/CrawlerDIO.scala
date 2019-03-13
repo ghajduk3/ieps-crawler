@@ -10,7 +10,8 @@ object CrawlerDIO {
   implicit val ec: ExecutionContext = ExecutionContext.global
 
   def findSiteById(id: Int): DBIO[Option[SiteRow]] = Query.siteById(id).result.headOption
-  def findPageById(id: Int): DBIO[Option[PageRow]] = Query.pageById(id).result.headOption
+  def findPageByIdOption(id: Int): DBIO[Option[PageRow]] = Page.filter(_.id === id).result.headOption
+  def findPageById(id: Int): DBIO[PageRow] = Page.filter(_.id === id).result.head
   def findPageByIds(ids: Seq[Int]): DBIO[Seq[PageRow]] = Page.filter(_.id inSet ids).result
   def findPageByLinkTarget(links: Seq[LinkRow]): DBIO[Seq[PageRow]] = Page.filter(_.id inSet links.map(_.toPage)).result
   def findSiteWithPages: DBIO[Seq[(SiteRow, PageRow)]] = Query.getSiteWithPages.result
@@ -18,7 +19,7 @@ object CrawlerDIO {
   def findPageDatumByPageId(id: Int): DBIO[Seq[PageDataRow]] = PageData.filter(_.pageId === id).result
   def findLinksBySourceId(id: Int): DBIO[Seq[LinkRow]] = Query.linksByFromId(id).result
 
-  def getPageLinksById(id: Int): DBIO[(Option[PageRow], Seq[PageRow])] = for {
+  def getPageLinksById(id: Int): DBIO[(PageRow, Seq[PageRow])] = for {
     sourcePage <- findPageById(id)
     links <- findLinksBySourceId(id)
     targetPages <- findPageByLinkTarget(links)
@@ -34,8 +35,23 @@ object CrawlerDIO {
   def getDataTypes: DBIO[Seq[DataTypeRow]] = Query.dataTypes
 
   // insert statements
-  def insertSite(site: SiteRow): DBIO[SiteRow] = Query.writeSite += site
-  def insertPage(page: PageRow): DBIO[PageRow] = Query.writePage += page
+  def insertSite(site: SiteRow): DBIO[SiteRow] = (Query.writeSite += site).transactionally
+  def insertPage(page: PageRow): DBIO[PageRow] = (Query.writePage += page).transactionally
+  def insertOrUpdatePage(page: PageRow): DBIO[PageRow] = {
+    val query = Page.filter(_.id === page.id)
+    val existsAction = query.exists.result
+    (for {
+      exists <- existsAction
+      result <- exists match {
+        case true =>
+          query.update(page).flatMap{ _ => findPageById(page.id)}.transactionally
+        case false => {
+          insertPage(page).flatMap(pageRow => findPageById(pageRow.id)).transactionally //transactionally is important
+        }
+      }
+    } yield result).transactionally
+  }
+
   def insertPages(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = Query.writePage ++= pages
   def insertLink(link: LinkRow): DBIO[LinkRow] = Query.writeLink += link
   def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id))
@@ -45,10 +61,14 @@ object CrawlerDIO {
   def insertPageData(pageData: Seq[PageDataRow]): DBIO[Seq[PageDataRow]] = Query.writePageData ++= pageData
 
   // insert site with pages
-  def insertSiteWithPage(site: SiteRow, page: PageRow): DBIO[(SiteRow, PageRow)] = for {
-    site <- insertSite(site)
-    page <- insertPage(page.copy(siteId = Some(site.id)))
-  } yield (site, page)
+  def insertSiteWithPage(
+     site: SiteRow,
+     page: PageRow
+  ): DBIO[(SiteRow, PageRow)] =
+    for {
+      site <- insertSite(site)
+      page <- insertPage(page.copy(siteId = Some(site.id)))
+    } yield (site, page)
 
   def insertSiteWithPages(site: SiteRow, pages: Seq[PageRow]): DBIO[(SiteRow, Seq[PageRow])] = for {
     site <- insertSite(site)
@@ -56,14 +76,14 @@ object CrawlerDIO {
   } yield (site, page)
 
   def insertPageWithContent(
-   page: PageRow,
-   images: Seq[ImageRow],
-   pageDatum: Seq[PageDataRow]
+     page: PageRow,
+     images: Seq[ImageRow],
+     pageDatum: Seq[PageDataRow]
   ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
     for {
-      insertedPage <- insertPage(page) // TODO: make this insertOrUpdate
-      insertedImages <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id))))
-      insertedPageData <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id))))
+      insertedPage      <- insertOrUpdatePage(page) // might cause a problem cause it's of type Option[PageRow] --> CAREFUL
+      insertedImages    <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id))))
+      insertedPageData  <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id))))
     } yield(insertedPage, insertedImages, insertedPageData)
 
   object Query {

@@ -25,10 +25,10 @@ class DBService(dbConfig: String) {
     Await.result(insertSiteFuture(site), timeout)
 
   // Page
-  def getPageByIdFuture(id: Int): Future[Option[PageRow]] =
+  def getPageByIdFuture(id: Int): Future[PageRow] =
     db.run(CrawlerDIO.findPageById(id))
 
-  def getPageById(id: Int): Option[PageRow] =
+  def getPageById(id: Int): PageRow =
     Await.result(getPageByIdFuture(id), timeout)
 
   def insertPageFuture(page: PageRow): Future[PageRow] =
@@ -63,7 +63,7 @@ class DBService(dbConfig: String) {
     Await.result(linkPagesFuture(fromPage, toPage), timeout)
 
   // bulk read
-  def getPageLinksFuture(id: Int): Future[(Option[PageRow], Seq[PageRow])] =
+  def getPageLinksFuture(id: Int): Future[(PageRow, Seq[PageRow])] =
     db.run(CrawlerDIO.getPageLinksById(id))
 
   def findPagesByLinkTarget(links: Seq[LinkRow]): Future[Seq[PageRow]] =
