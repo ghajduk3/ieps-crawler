@@ -16,6 +16,7 @@ lazy val root = (project in file("."))
       "org.tpolecat" %% "doobie-core"      % "0.6.0",
       "org.tpolecat" %% "doobie-postgres"  % "0.6.0", // Postgres driver 42.2.5 + type mappings.
       "org.tpolecat" %% "doobie-specs2" % "0.6.0",
-      "com.panforge" % "robots" % "1.4.0"
+      "com.panforge" % "robots" % "1.4.0",
+      "com.github.crawler-commons" % "crawler-commons" % "0.10"
     )
   )

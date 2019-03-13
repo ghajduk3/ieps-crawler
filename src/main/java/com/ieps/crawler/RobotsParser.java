@@ -1,5 +1,6 @@
 package com.ieps.crawler;
 
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -9,6 +10,7 @@ import java.util.List;
 
 import com.panforge.robotstxt.RobotsTxt;
 
+
 public class RobotsParser {
     private String url;
 
@@ -16,17 +18,18 @@ public class RobotsParser {
         this.url = url;
     }
 
+
     // Return /robots.txt content
     public String robotsTxtContent() {
         try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
             RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
-//            robotsTxt.query()
             return robotsTxt.toString();
         } catch (IOException e) {
             e.printStackTrace();
         }
         return null;
     }
+
 
     // Return all user agents
     public List<String> allUserAgents() {
@@ -48,15 +51,26 @@ public class RobotsParser {
         return null;
     }
 
-    // Is user agent allowed to visit a page
-    public boolean isAllowed(String userAgentName, String path) {
-        boolean permission = false;
+    // Get list of disallowed resources
+    public List<String> getDisallowList(String userAgentName) {
+        List<String> permission = new ArrayList<>();
         try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
             RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
-            permission = robotsTxt.query(userAgentName, path);
+            permission = robotsTxt.getDisallowList(userAgentName);
         } catch (IOException e) {
             e.printStackTrace();
         }
         return permission;
+    }
+
+    public List<String> getSiteMapUrls() {
+        List<String> siteMapUrls = new ArrayList<>();
+        try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
+            RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
+            siteMapUrls = robotsTxt.getSitemaps();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return siteMapUrls;
     }
 }
