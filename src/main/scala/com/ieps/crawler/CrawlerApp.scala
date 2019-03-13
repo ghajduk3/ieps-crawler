@@ -8,10 +8,11 @@ import scala.concurrent.ExecutionContext
 
 
 object CrawlerApp extends App with StrictLogging {
-  import db.Tables._
+  //import db.Tables._
   implicit val ec = ExecutionContext.global
   val dbService = new DBService("local")
   try {
+    logger.info(Canonical.getCanonical("http://stackoveRRRflow.com:80/"))
     // list entities
 //    val resultFuture = db.run(Tables.PageType.result)
 //    var result = Await.result(resultFuture, Duration.Inf).toList
@@ -51,9 +52,9 @@ object CrawlerApp extends App with StrictLogging {
 //    val page1 = PageRow(-1, Some(-1), Some("HTML"), Some("url3"))
 //    val page2 = PageRow(-1, Some(-1), Some("HTML"), Some("url2"))
 //    logger.info(s"${dbService.insertSiteWithPages(site, Seq(page1, page2))}")
-    val page1 = dbService.getPageById(11)
-    val result = dbService.insertPageWithContent(page1.copy(page1.id, page1.siteId, page1.pageTypeCode, Some("url7")), Seq(), Seq())
-    logger.info(s"$result")
+    //val page1 = dbService.getPageById(11)
+    //val result = dbService.insertPageWithContent(page1.copy(page1.id, page1.siteId, page1.pageTypeCode, Some("url7")), Seq(), Seq())
+    //logger.info(s"$result")
 //    val page2 = dbService.getPageById(11).get
 //    logger.info(s"${dbService.linkPages(page1, page2)}")
 //    logger.info(s"${dbService.getPageLinks(page1)}")
