@@ -1,17 +1,24 @@
 package com.ieps.crawler
 
 import com.ieps.crawler.db.DBService
+import com.ieps.crawler.headless.HeadlessWeb
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 
 object CrawlerApp extends App with StrictLogging {
   import db.Tables._
-  implicit val ec = ExecutionContext.global
+  implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val dbService = new DBService("local")
   try {
+
+    val browser = new HeadlessWeb
+    val result1 = browser.getPageSource("https://www.google.com/")
+    val result2 = browser.getPageSource("https://www.facebook.com")
+    logger.info(s"result1 size = ${result1.length}")
+    logger.info(s"result2 size = ${result2.length}")
     // list entities
 //    val resultFuture = db.run(Tables.PageType.result)
 //    var result = Await.result(resultFuture, Duration.Inf).toList
@@ -51,9 +58,9 @@ object CrawlerApp extends App with StrictLogging {
 //    val page1 = PageRow(-1, Some(-1), Some("HTML"), Some("url3"))
 //    val page2 = PageRow(-1, Some(-1), Some("HTML"), Some("url2"))
 //    logger.info(s"${dbService.insertSiteWithPages(site, Seq(page1, page2))}")
-    val page1 = dbService.getPageById(11)
-    val result = dbService.insertPageWithContent(page1.copy(page1.id, page1.siteId, page1.pageTypeCode, Some("url7")), Seq(), Seq())
-    logger.info(s"$result")
+//    val page1 = dbService.getPageById(11)
+//    val result = dbService.insertPageWithContent(page1.copy(page1.id, page1.siteId, page1.pageTypeCode, Some("url7")), Seq(), Seq())
+//    logger.info(s"$result")
 //    val page2 = dbService.getPageById(11).get
 //    logger.info(s"${dbService.linkPages(page1, page2)}")
 //    logger.info(s"${dbService.getPageLinks(page1)}")
@@ -71,5 +78,5 @@ object CrawlerApp extends App with StrictLogging {
     case e: Exception =>
       logger.error(e.getMessage)
       e.printStackTrace()
-  } finally dbService.closeDb
+  } finally dbService.closeDb()
 }
