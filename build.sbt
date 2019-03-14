@@ -19,7 +19,9 @@ lazy val root = (project in file("."))
       "com.typesafe.slick" %% "slick-codegen" % "3.3.0",
       "com.github.tototoshi" %% "slick-joda-mapper" % "2.4.0",
       "joda-time" % "joda-time" % "2.7",
-      "org.joda" % "joda-convert" % "1.7"
+      "org.joda" % "joda-convert" % "1.7",
+      "org.seleniumhq.selenium" % "selenium-java" % "3.141.59",
+      "io.github.bonigarcia" % "webdrivermanager" % "3.3.0"
     )
   )
 
