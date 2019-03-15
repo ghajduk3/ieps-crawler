@@ -19,7 +19,9 @@ lazy val root = (project in file("."))
       "com.typesafe.slick" %% "slick-codegen" % "3.3.0",
       "com.github.tototoshi" %% "slick-joda-mapper" % "2.4.0",
       "joda-time" % "joda-time" % "2.7",
-      "org.joda" % "joda-convert" % "1.7"
+      "org.joda" % "joda-convert" % "1.7",
+      "com.github.crawler-commons" % "crawler-commons" % "0.10",
+      "org.jsoup" % "jsoup" % "1.11.3"
       
     )
   )
