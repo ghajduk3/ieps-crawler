@@ -21,13 +21,14 @@ public class RobotsParser {
 
     // Return /robots.txt content
     public String robotsTxtContent() {
+        String content = null;
         try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
             RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
-            return robotsTxt.toString();
+            content = robotsTxt.toString();
         } catch (IOException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
         }
-        return null;
+        return content;
     }
 
 
@@ -63,6 +64,20 @@ public class RobotsParser {
         return permission;
     }
 
+
+    // Get list of disallowed resources
+    public int getDelay() {
+        int delay = 5;
+        try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
+            RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
+            delay = robotsTxt.ask("*", url + "/robots.txt").getCrawlDelay();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return delay;
+    }
+
+    // Returns a list od site map urls
     public List<String> getSiteMapUrls() {
         List<String> siteMapUrls = new ArrayList<>();
         try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
