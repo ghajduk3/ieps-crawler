@@ -21,8 +21,8 @@ lazy val root = (project in file("."))
       "joda-time" % "joda-time" % "2.7",
       "org.joda" % "joda-convert" % "1.7",
       "com.github.crawler-commons" % "crawler-commons" % "0.10",
-      "org.jsoup" % "jsoup" % "1.11.3"
-      
+      "org.jsoup" % "jsoup" % "1.11.3",
+      "com.github.crawler-commons" % "crawler-commons"    % "0.10"
     )
   )
 
