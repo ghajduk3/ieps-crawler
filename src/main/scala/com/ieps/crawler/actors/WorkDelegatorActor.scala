@@ -2,13 +2,14 @@ package com.ieps.crawler.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
+import com.ieps.crawler.db.Tables._
 import com.typesafe.scalalogging.StrictLogging
 
 object WorkDelegatorActor {
   def props(frontier: Object): Props = Props(new WorkDelegatorActor(frontier))
 
   case object GetNextURL
-  case class ProcessNextPage(url: String) // TODO: Abstract the url in a class to have more content
+  case class ProcessNextPage(pageRow: PageRow) // TODO: Abstract the url in a class to have more content
   case class InsertPage(url: String)
 }
 
