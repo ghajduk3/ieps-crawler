@@ -1,25 +1,26 @@
 package com.ieps.crawler
 
+import com.ieps.crawler
+import com.ieps.crawler.db.Tables
 import com.ieps.crawler.db.Tables.{ImageRow, PageRow, SiteRow}
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+
 import scala.collection.JavaConverters._
 
 
-class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
-  val html: String = kod
-  var doc: Document = new Document(html)
-  doc = Jsoup.parse(html)
+class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
+  var doc: Document = Jsoup.parse(pageSource.htmlContent.get)
 
   //method that gets src from <img> tags
-  def getImg: List[ImageRow] = {
+  def getImgs: List[ImageRow] = {
     val imgs = doc.select("img[src]").asScala
     var newImages = List.empty[ImageRow]
     imgs.foreach(img => {
       try {
 
         val actualImg = imgLink(img.attr("src"))
-        newImages = newImages :+ ImageRow(-1, Some(page.id), Some(actualImg), Some(conType(actualImg)))
+        newImages = newImages :+ ImageRow(-1, Some(pageSource.id), Some(actualImg), Some(conType(actualImg)))
       }
       catch {
         case _: Exception =>
@@ -28,13 +29,13 @@ class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
     newImages
   }
 
-  def getLinks: List[PageRow] = {
+  private def getAllLinks: List[PageRow] = {
     var allLinks = List.empty[PageRow]
     val links = doc.select("a[href]").asScala
     links.foreach(link => {
       try {
         val actualLink = extractLink(link.attr("href"))
-        allLinks = allLinks :+ PageRow(-1, Some(site.id), Some("FRONTIER"), Some(actualLink))
+        allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualLink))
       } catch {
         case _: Exception =>
       }
@@ -43,7 +44,7 @@ class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
     onclick.forEach(click => {
       try {
         val actualClick = extractLink(click.attr("onclick"))
-        allLinks = allLinks :+ PageRow(-1, Some(site.id), Some("FRONTIER"), Some(actualClick))
+        allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualClick))
       }
       catch {
         case _: Exception =>
@@ -53,13 +54,25 @@ class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
     allLinks
   }
 
+  def getPageLinks: List[crawler.db.Tables.PageRow] = {
+    getAllLinks.filter(pageRow => {
+      !pageRow.url.get.endsWith(".pdf") //TODO: fix this to work with all binary data types
+    })
+  }
+
+  def getPageDATA: List[Tables.PageRow] = {
+    getAllLinks.filter(pageRow => {
+      !pageRow.url.get.endsWith(".pdf") //TODO: fix this to work with all binary data types
+    })
+  }
+
   def extractLink(url: String): String = {
     try {
       Canonical.getCanonical(url)
     }
     catch {
-      case e: Exception =>
-        Canonical.getCanonical(site.domain.get + url)
+      case _: Exception =>
+        Canonical.getCanonical(siteSource.domain.get + url)
     }
   }
 
@@ -68,15 +81,13 @@ class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
       Canonical.getCanonical(url)
     }
     catch {
-      case e: Exception =>
-        var url1: String = if (url.contains(site.domain.get) && (url.contains("http://") || url.contains("http://"))) {
+      case _: Exception =>
+        var url1: String = if (url.contains(siteSource.domain.get) && (url.contains("http://") || url.contains("http://"))) {
           url: String
-        }
-        else if (url.contains(site.domain.get)) {
+        } else if (url.contains(siteSource.domain.get)) {
           "http://" + url
-        }
-        else {
-          "http://" + site.domain.get + url
+        } else {
+          "http://" + siteSource.domain.get + url
         }
         url1 = Canonical.getCanonical(url1)
         url1
