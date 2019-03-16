@@ -5,13 +5,13 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import scala.collection.JavaConverters._
 
+
 class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
   val html: String = kod
   var doc: Document = new Document(html)
   doc = Jsoup.parse(html)
 
   //method that gets src from <img> tags
-  //val img je list stringova --- Masja ako ti treba
   def getImg: List[ImageRow] = {
     val imgs = doc.select("img[src]").asScala
     var newImages = List.empty[ImageRow]
@@ -83,5 +83,6 @@ class HTMLinks(kod: String, page: PageRow, site: SiteRow) {
     }
   }
 
-  def conType(url: String):String = url.slice(url.lastIndexOf("."), url.last)
+  def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.lastIndexOf("/"))
+
 }
