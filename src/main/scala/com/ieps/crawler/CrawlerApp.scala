@@ -6,12 +6,14 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.ExecutionContext
 
 
+
+
 object CrawlerApp extends App with StrictLogging {
 
 
   val url = "http://www.e-prostor.gov.si"
 //  val url = "http://evem.gov.si"
-  val crawlerSiteMap = new CrawlerSiteMap(url)
+  val crawlerSiteMap = new CrawlerSiteMap()
   val robotsTxt = new RobotsParser(url)
   var robotsTXT = true // If robots.txt does not exist or unable to read it's content, this variable will be FALSE
   val content = robotsTxt.robotsTxtContent()
@@ -24,12 +26,10 @@ object CrawlerApp extends App with StrictLogging {
   * */
   if (content!=null) {
     val siteMapUrl = robotsTxt.getSiteMapUrls // Find site map's URL
-    val disallowed = robotsTxt.getDisallowList("*") // Gets list of all disallowed pages from robots.txt
-//    val delay = robotsTxt.getDelay // Gets Crawl-delay
-    println(crawlerSiteMap.URLSList(siteMapUrl)) // Find all urls in the site map
-    println(disallowed)
-
-
+//    val disallowed = robotsTxt.getDisallowList("*") // Gets list of all disallowed pages from robots.txt
+    crawlerSiteMap.getSiteMapUrls(siteMapUrl.get(0))
+    val testAllowed = robotsTxt.isAllowed("/fileadmin/global/")
+    println("\nJe li to to? " + testAllowed)
   }else{
     robotsTXT = false
   }

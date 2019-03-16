@@ -51,18 +51,18 @@ public class RobotsParser {
         }
         return null;
     }
-
-    // Get list of disallowed resources
-    public List<String> getDisallowList(String userAgentName) {
-        List<String> permission = new ArrayList<>();
-        try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
-            RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
-            permission = robotsTxt.getDisallowList(userAgentName);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return permission;
-    }
+//
+//    // Get list of disallowed resources
+//    public List<String> getDisallowList(String userAgentName) {
+//        List<String> permission = new ArrayList<>();
+//        try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
+//            RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
+//            permission = robotsTxt.getDisallowList(userAgentName);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//        return permission;
+//    }
 
 
     // Get list of disallowed resources
@@ -87,5 +87,31 @@ public class RobotsParser {
             e.printStackTrace();
         }
         return siteMapUrls;
+    }
+
+    /*
+    * Is visiting url allowed
+    * This method should have for
+    * it's argument baseless url
+    *
+    * e.g. if checking for
+    * "www.facebook.com/groups/names/"
+    * input should only be "/groups/names/"
+    * *
+    * */
+    public boolean isAllowed(String urlRobots) {
+        List<String> listUrls;
+        boolean allowed = false;
+        try (InputStream robotsTxtStream = new URL(url + "/robots.txt").openStream()) {
+            RobotsTxt robotsTxt = RobotsTxt.read(robotsTxtStream);
+            listUrls = robotsTxt.getDisallowList("*");
+            for (String urls : listUrls) {
+                allowed = urlRobots.equals(urls);
+                if (allowed) break;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return allowed;
     }
 }
