@@ -11,7 +11,7 @@ import scala.collection.JavaConverters._
 
 class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
   var doc: Document = Jsoup.parse(pageSource.htmlContent.get)
-  val extensions = Array(".pdf",".doc","docx","ppt",".pptx")
+  val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
   //method that gets src from <img> tags
   def getImgs: List[ImageRow] = {
