@@ -2,6 +2,7 @@ package com.ieps.crawler.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
+import com.ieps.crawler.db.DBService
 import com.ieps.crawler.db.Tables.PageRow
 import com.ieps.crawler.headless.HeadlessWeb
 import com.typesafe.scalalogging.StrictLogging
@@ -26,6 +27,7 @@ class CrawlerWorkerActor(
   private val logInstanceIdentifier = s"CrawlerWorker_$workerId:"
   private var inIdleState: DateTime = DateTime.now()
   private val browser = new HeadlessWeb()
+  private val dbService = new DBService()
 
   private def getDuration(dateTime: DateTime): FiniteDuration = FiniteDuration(DateTime.now().minus(dateTime.getMillis).getMillis, MILLISECONDS)
 

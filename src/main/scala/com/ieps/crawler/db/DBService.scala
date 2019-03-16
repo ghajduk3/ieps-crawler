@@ -5,7 +5,7 @@ import slick.jdbc.PostgresProfile.api._
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
-class DBService(dbConfig: String) {
+class DBService(dbConfig: String = "local") {
   import Tables._
 
   val db = Database.forConfig(dbConfig)
