@@ -94,4 +94,5 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
 
   def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
 
+
 }
