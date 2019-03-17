@@ -11,6 +11,7 @@ import scala.collection.JavaConverters._
 
 class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
   var doc: Document = Jsoup.parse(pageSource.htmlContent.get)
+  val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
   //method that gets src from <img> tags
   def getImgs: List[ImageRow] = {
@@ -18,7 +19,6 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
     var newImages = List.empty[ImageRow]
     imgs.foreach(img => {
       try {
-
         val actualImg = imgLink(img.attr("src"))
         newImages = newImages :+ ImageRow(-1, Some(pageSource.id), Some(actualImg), Some(conType(actualImg)))
       }
@@ -49,20 +49,18 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
       catch {
         case _: Exception =>
       }
-
     })
     allLinks
   }
 
   def getPageLinks: List[crawler.db.Tables.PageRow] = {
-    getAllLinks.filter(pageRow => {
-      !pageRow.url.get.endsWith(".pdf") //TODO: fix this to work with all binary data types
+    getAllLinks.filter(pageRow => { extensions.exists(e => !pageRow.url.get.endsWith(e))
     })
   }
 
   def getPageDATA: List[Tables.PageRow] = {
-    getAllLinks.filter(pageRow => {
-      !pageRow.url.get.endsWith(".pdf") //TODO: fix this to work with all binary data types
+    getAllLinks.filter(pageRow => { extensions.exists(e => pageRow.url.get.endsWith(e))
+
     })
   }
 
@@ -90,10 +88,10 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
           "http://" + siteSource.domain.get + url
         }
         url1 = Canonical.getCanonical(url1)
-        url1
+        url1.replace(url1.takeRight(1),"")
     }
   }
 
-  def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.lastIndexOf("/"))
+  def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
 
 }
