@@ -62,8 +62,8 @@ object CrawlerApp extends App with StrictLogging {
     val browser = new HeadlessWeb
     val result1 = browser.getPageSource("https://www.google.com/")
     val result2 = browser.getPageSource("https://www.facebook.com")
-    logger.info(s"result1 size = ${result1.length}")
-    logger.info(s"result2 size = ${result2.length}")
+    logger.info(s"result1 status code = ${result1._1} size = ${result1._2.get.length}")
+    logger.info(s"result2 status code = ${result2._1} size = ${result2._2.get.length}")
     // list entities
 //    val resultFuture = db.run(Tables.PageType.result)
 //    var result = Await.result(resultFuture, Duration.Inf).toList
