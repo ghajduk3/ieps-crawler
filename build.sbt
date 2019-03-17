@@ -13,6 +13,8 @@ lazy val root = (project in file("."))
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
       "com.typesafe.akka" %% "akka-actor" % "2.5.21",
       "com.typesafe.akka" %% "akka-testkit" % "2.5.21" % Test,
+      "com.panforge" % "robots" % "1.4.0",
+      "com.github.crawler-commons" % "crawler-commons" % "0.10",
       "com.typesafe.slick" %% "slick" % "3.3.0",
       "com.typesafe.slick" %% "slick-hikaricp" % "3.3.0",
       "org.postgresql" % "postgresql" % "9.4-1206-jdbc42",

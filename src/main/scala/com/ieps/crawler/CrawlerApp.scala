@@ -2,6 +2,7 @@ package com.ieps.crawler
 
 import com.ieps.crawler.db.DBService
 import com.ieps.crawler.headless.HeadlessWeb
+import com.ieps.crawler.utils.SiteRobotsTxt
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 
@@ -9,7 +10,40 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 
 object CrawlerApp extends App with StrictLogging {
+
   import db.Tables._
+  /*val url = "http://www.e-prostor.gov.si"
+//  val url = "http://evem.gov.si"
+  val crawlerSiteMap = new CrawlerSiteMap()
+  val robotsTxt = new RobotsParser(url)
+  var robotsTXT = true // If robots.txt does not exist or unable to read it's content, this variable will be FALSE
+  val content = robotsTxt.robotsTxtContent()
+
+  /*
+  * If there is no /robots.txt
+  * nothing will be executed
+  * since everything is dependent
+  * on the content of /robots.txt
+  * */
+  if (content!=null) {
+    val siteMapUrl = robotsTxt.getSiteMapUrls // Find site map's URL
+//    val disallowed = robotsTxt.getDisallowList("*") // Gets list of all disallowed pages from robots.txt
+    crawlerSiteMap.getSiteMapUrls(siteMapUrl.get(0))
+    val testAllowed = robotsTxt.isAllowed("/fileadmin/global/")
+    println("\nJe li to to? " + testAllowed)
+  }else{
+    robotsTXT = false
+  }*/
+
+//  val result = getSiteMapUrls("http://www.e-prostor.gov.si/?eID=dd_googlesitemap", SiteRow(1, Some("http://www.e-prostor.gov.si/")))
+//  result.foreach(res => logger.info(s"$res"))
+  val content = "User-Agent: *\nAllow: /\nDisallow: /fileadmin/global/\nDisallow: /t3lib/\nDisallow: /nc/\nDisallow: *no_cache*\nDisallow: /*cHash\nDisallow: /typo3/\nDisallow: /urednik/\nDisallow: /typo3conf/\nDisallow: /typo3temp/\nDisallow: /*?id=*\nDisallow: /*&type=98\nDisallow: /*&type=100\n\nSitemap: http://www.e-prostor.gov.si/?eID=dd_googlesitemap"
+  val site = SiteRow(-1, Some("http://www.e-prostor.gov.si/"), Some(content))
+  val result = new SiteRobotsTxt(site)
+//  result.getRobotRules.foreach(rule => logger.info(s"${rule.getPrefix} : ${rule.isAllow}"))
+  logger.info(s"${result.isAllowed(PageRow(-1, None, None, Some("http://www.e-prostor.gov.si/nc/bla")))}")
+  logger.info(s"${result.isAllowed(PageRow(-1, None, None, Some("http://www.e-prostor.gov.si/index.html")))}")
+
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val dbService = new DBService("local")
   try {
