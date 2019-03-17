@@ -13,6 +13,8 @@ lazy val root = (project in file("."))
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
       "com.typesafe.akka" %% "akka-actor" % "2.5.21",
       "com.typesafe.akka" %% "akka-testkit" % "2.5.21" % Test,
+      "com.panforge" % "robots" % "1.4.0",
+      "com.github.crawler-commons" % "crawler-commons" % "0.10",
       "com.typesafe.slick" %% "slick" % "3.3.0",
       "com.typesafe.slick" %% "slick-hikaricp" % "3.3.0",
       "org.postgresql" % "postgresql" % "9.4-1206-jdbc42",
@@ -22,8 +24,13 @@ lazy val root = (project in file("."))
       "org.joda" % "joda-convert" % "1.7",
       "com.github.crawler-commons" % "crawler-commons" % "0.10",
       "org.jsoup" % "jsoup" % "1.11.3",
-      "info.debatty" % "java-lsh" % "0.11"
-
+      "info.debatty" % "java-lsh" % "0.11",
+      "org.joda" % "joda-convert" % "1.7",
+      "org.seleniumhq.selenium" % "selenium-server" % "3.141.59",
+      "org.seleniumhq.selenium" % "selenium-java" % "3.141.59",
+      "org.seleniumhq.selenium" % "selenium-remote-driver" % "3.141.59",
+      "org.seleniumhq.selenium" % "selenium-api" % "3.141.59",
+      "io.github.bonigarcia" % "webdrivermanager" % "3.3.0"
     )
   )
 

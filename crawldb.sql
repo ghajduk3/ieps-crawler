@@ -1,95 +1,95 @@
-CREATE SCHEMA IF NOT EXISTS crawldb;
+create schema if not exists crawldb;
 
-CREATE TABLE crawldb.data_type ( 
-	code                 varchar(20)  NOT NULL,
-	CONSTRAINT pk_data_type_code PRIMARY KEY ( code )
+create table crawldb.data_type (
+	code                 varchar(20)  not null,
+	constraint pk_data_type_code primary key ( code )
  );
 
-CREATE TABLE crawldb.page_type ( 
-	code                 varchar(20)  NOT NULL,	
-	CONSTRAINT pk_page_type_code PRIMARY KEY ( code )
+create table crawldb.page_type (
+	code                 varchar(20)  not null,
+	constraint pk_page_type_code primary key ( code )
  );
 
-CREATE TABLE crawldb.site ( 
-	id                   serial  NOT NULL,
+create table crawldb.site (
+	id                   serial  not null,
 	"domain"             varchar(500)  ,
 	robots_content       text  ,
 	sitemap_content      text  ,
-	CONSTRAINT pk_site_id PRIMARY KEY ( id )
+	constraint pk_site_id primary key ( id )
  );
 
-CREATE TABLE crawldb.page ( 
-	id                   serial  NOT NULL,
+create table crawldb.page (
+	id                   serial  not null,
 	site_id              integer  ,
 	page_type_code       varchar(20)  ,
 	url                  varchar(3000)  ,
 	html_content         text  ,
 	http_status_code     integer  ,
 	accessed_time        timestamp  ,
-	CONSTRAINT pk_page_id PRIMARY KEY ( id ),
-	CONSTRAINT unq_url_idx UNIQUE ( url ) 
+	constraint pk_page_id primary key ( id ),
+	constraint unq_url_idx unique ( url )
  );
 
-CREATE INDEX "idx_page_site_id" ON crawldb.page ( site_id );
+create index "idx_page_site_id" on crawldb.page ( site_id );
 
-CREATE INDEX "idx_page_page_type_code" ON crawldb.page ( page_type_code );
+create index "idx_page_page_type_code" on crawldb.page ( page_type_code );
 
-CREATE TABLE crawldb.page_data ( 
-	id                   serial  NOT NULL,
+create table crawldb.page_data (
+	id                   serial  not null,
 	page_id              integer  ,
 	data_type_code       varchar(20)  ,
 	"data"               bytea,
-	CONSTRAINT pk_page_data_id PRIMARY KEY ( id )
+	constraint pk_page_data_id primary key ( id )
  );
 
-CREATE INDEX "idx_page_data_page_id" ON crawldb.page_data ( page_id );
+create index "idx_page_data_page_id" on crawldb.page_data ( page_id );
 
-CREATE INDEX "idx_page_data_data_type_code" ON crawldb.page_data ( data_type_code );
+create index "idx_page_data_data_type_code" on crawldb.page_data ( data_type_code );
 
-CREATE TABLE crawldb.image ( 
-	id                   serial  NOT NULL,
+create table crawldb.image (
+	id                   serial  not null,
 	page_id              integer  ,
 	filename             varchar(255)  ,
 	content_type         varchar(50)  ,
 	"data"               bytea  ,
 	accessed_time        timestamp  ,
-	CONSTRAINT pk_image_id PRIMARY KEY ( id )
+	constraint pk_image_id primary key ( id )
  );
 
-CREATE INDEX "idx_image_page_id" ON crawldb.image ( page_id );
+create index "idx_image_page_id" on crawldb.image ( page_id );
 
-CREATE TABLE crawldb.link ( 
-	from_page            integer  NOT NULL,
-	to_page              integer  NOT NULL,
-	CONSTRAINT _0 PRIMARY KEY ( from_page, to_page )
+create table crawldb.link (
+	from_page            integer  not null,
+	to_page              integer  not null,
+	constraint _0 primary key ( from_page, to_page )
  );
 
-CREATE INDEX "idx_link_from_page" ON crawldb.link ( from_page );
+create index "idx_link_from_page" on crawldb.link ( from_page );
 
-CREATE INDEX "idx_link_to_page" ON crawldb.link ( to_page );
+create index "idx_link_to_page" on crawldb.link ( to_page );
 
-ALTER TABLE crawldb.image ADD CONSTRAINT fk_image_page_data FOREIGN KEY ( page_id ) REFERENCES crawldb.page( id ) ON DELETE RESTRICT;
+alter TABLE crawldb.image ADD CONSTRAINT fk_image_page_data FOREIGN KEY ( page_id ) REFERENCES crawldb.page( id ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.link ADD CONSTRAINT fk_link_page FOREIGN KEY ( from_page ) REFERENCES crawldb.page( id ) ON DELETE RESTRICT;
+alter TABLE crawldb.link ADD CONSTRAINT fk_link_page FOREIGN KEY ( from_page ) REFERENCES crawldb.page( id ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.link ADD CONSTRAINT fk_link_page_1 FOREIGN KEY ( to_page ) REFERENCES crawldb.page( id ) ON DELETE RESTRICT;
+alter TABLE crawldb.link ADD CONSTRAINT fk_link_page_1 FOREIGN KEY ( to_page ) REFERENCES crawldb.page( id ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.page ADD CONSTRAINT fk_page_site FOREIGN KEY ( site_id ) REFERENCES crawldb.site( id ) ON DELETE RESTRICT;
+alter TABLE crawldb.page ADD CONSTRAINT fk_page_site FOREIGN KEY ( site_id ) REFERENCES crawldb.site( id ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.page ADD CONSTRAINT fk_page_page_type FOREIGN KEY ( page_type_code ) REFERENCES crawldb.page_type( code ) ON DELETE RESTRICT;
+alter TABLE crawldb.page ADD CONSTRAINT fk_page_page_type FOREIGN KEY ( page_type_code ) REFERENCES crawldb.page_type( code ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.page_data ADD CONSTRAINT fk_page_data_page FOREIGN KEY ( page_id ) REFERENCES crawldb.page( id ) ON DELETE RESTRICT;
+alter TABLE crawldb.page_data ADD CONSTRAINT fk_page_data_page FOREIGN KEY ( page_id ) REFERENCES crawldb.page( id ) ON delete RESTRICT;
 
-ALTER TABLE crawldb.page_data ADD CONSTRAINT fk_page_data_data_type FOREIGN KEY ( data_type_code ) REFERENCES crawldb.data_type( code ) ON DELETE RESTRICT;
+alter TABLE crawldb.page_data ADD CONSTRAINT fk_page_data_data_type FOREIGN KEY ( data_type_code ) REFERENCES crawldb.data_type( code ) ON delete RESTRICT;
 
-INSERT INTO crawldb.data_type VALUES 
+insert into crawldb.data_type values
 	('PDF'),
 	('DOC'),
 	('DOCX'),
 	('PPT'),
 	('PPTX');
 
-INSERT INTO crawldb.page_type VALUES 
+insert into crawldb.page_type values
 	('HTML'),
 	('BINARY'),
 	('DUPLICATE'),
