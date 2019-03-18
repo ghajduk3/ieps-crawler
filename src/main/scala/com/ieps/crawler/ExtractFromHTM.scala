@@ -83,15 +83,16 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
         var url1: String = if (url.contains(siteSource.domain.get) && (url.contains("http://") || url.contains("http://"))) {
           url: String
         } else if (url.contains(siteSource.domain.get)) {
-          "http://" + url
+          "http://"  + url
         } else {
           "http://" + siteSource.domain.get + url
         }
         url1 = Canonical.getCanonical(url1)
-        url1.replace(url1.takeRight(1),"")
+        url1
     }
   }
 
   def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
+
 
 }

@@ -19,9 +19,10 @@ object CrawlerApp extends App with StrictLogging {
     val noviHtml = new ExtractFromHTM(pageRow, siteRow)
     val x = noviHtml.getImgs
     val y = noviHtml.getPageLinks
-    val z = noviHtml.imgLink("http://www.vijesti.me/bundles/themes/swp/default-theme@xw69v1/img/logo.svg/")
+    val z = noviHtml.imgLink("www.vijesti.me/bundles/themes/swp/default-theme@xw69v1/img/logo.svg/")
     logger.info(s"$x")
-    logger.info(s"$y")
+    logger.info(s"$z")
+    logger.info(Canonical.getCanonical("http://www.vijesti.me/g.html"))
 
 
     // list entities
