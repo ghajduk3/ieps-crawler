@@ -1,15 +1,18 @@
-package com.ieps.crawler
+package com.ieps.crawler.utils
 
 import com.ieps.crawler
 import com.ieps.crawler.db.Tables
 import com.ieps.crawler.db.Tables.{ImageRow, PageRow, SiteRow}
+import com.typesafe.scalalogging.StrictLogging
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
 import scala.collection.JavaConverters._
 
 
-class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
+class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLogging {
+  logger.info(s"Extracting for: ${pageSource.url}")
+
   var doc: Document = Jsoup.parse(pageSource.htmlContent.get)
   val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
@@ -54,17 +57,14 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
   }
 
   def getPageLinks: List[crawler.db.Tables.PageRow] = {
-    getAllLinks.filter(pageRow => { extensions.exists(e => !pageRow.url.get.endsWith(e))
-    })
+    getAllLinks.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct
   }
 
-  def getPageDATA: List[Tables.PageRow] = {
-    getAllLinks.filter(pageRow => { extensions.exists(e => pageRow.url.get.endsWith(e))
-
-    })
+  def getPageData: List[Tables.PageRow] = {
+    getAllLinks.filter(pageRow => extensions.exists(e => pageRow.url.get.endsWith(e)))
   }
 
-  def extractLink(url: String): String = {
+  private def extractLink(url: String): String = {
     try {
       Canonical.getCanonical(url)
     }

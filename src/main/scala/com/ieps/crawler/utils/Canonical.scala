@@ -1,16 +1,18 @@
-package com.ieps.crawler
+package com.ieps.crawler.utils
+
+import java.net.{URI, URL}
+
+import com.typesafe.scalalogging.StrictLogging
+import crawlercommons.filters.basic.BasicURLNormalizer
 
 import scala.util.matching.Regex
-import com.typesafe.scalalogging.StrictLogging
-import java.net.{URI, URL, URLDecoder, URLEncoder}
-import crawlercommons.filters.basic.BasicURLNormalizer
 
 object Canonical extends StrictLogging {
   var pattern_percent: Regex = "(%[0-9a-f]{2})".r
   var index_pages = Array("index.html", "index.htm", "index.shtml", "index.php", "default.html", "default.htm", "home.html", "home.htm", "index.php5", "index.php4", "index.cgi", "index.php3", "placeholder.html", "default.asp")
   val extensions = Array(".html", ".htm" , ".htm",".php" , ".ppt" , ".pdf",".doc",".docx",".ppt",".pptx", ".php5" , ".php4" , ".cgi" ,".php3", ".asp" )
-  def getCanonical(wildUrl: String): String = {
 
+  def getCanonical(wildUrl: String): String = {
     val urlNormal: BasicURLNormalizer = new BasicURLNormalizer
     // var decodedURl = URLEncoder.encode(wildUrl.toLowerCase,"UTF-8")
     val url: URL = new URL(wildUrl)
@@ -43,6 +45,5 @@ object Canonical extends StrictLogging {
       }
     }
     urii
-
   }
 }

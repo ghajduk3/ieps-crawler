@@ -3,8 +3,8 @@ package com.ieps.crawler.actors
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.DBService
-import com.ieps.crawler.db.Tables.PageRow
-import com.ieps.crawler.utils.HeadlessBrowser
+import com.ieps.crawler.db.Tables.{LinkRow, PageRow, SiteRow}
+import com.ieps.crawler.utils.{ExtractFromHTML, HeadlessBrowser}
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 
@@ -22,8 +22,11 @@ class CrawlerWorkerActor(
     workerId: String
   ) extends Actor
     with StrictLogging {
+
   import CrawlerWorkerActor._
   import WorkDelegatorActor._
+  private implicit val delay: FiniteDuration = 4 seconds
+
   private val logInstanceIdentifier = s"CrawlerWorker_$workerId:"
   private var inIdleState: DateTime = DateTime.now()
   private val browser = new HeadlessBrowser()
@@ -38,18 +41,18 @@ class CrawlerWorkerActor(
       case dateTime: DateTime => WorkerStatusResponse(isIdle = true, getDuration(dateTime))
     })
 
-    case ProcessNextPage(pageRow) =>
+    case ProcessNextPage(pageRow, site) =>
       logger.info(s"$logInstanceIdentifier Got a new pageRow to process: $pageRow")
       //  remove the inIdleState
       inIdleState = null
-      processPage(pageRow)
+      processPage(pageRow, site)
       // after wrapping up with processing, update the idle state
       inIdleState = DateTime.now()
 
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
   }
 
-  def processPage(url: PageRow): List[PageRow] = {
+  def processPage(inputPage: PageRow, site:SiteRow): Seq[PageRow] = {
     // TODO: Process the url:
     //  1. extract the HTML code via Selenium
     //  2. extract:
@@ -58,9 +61,18 @@ class CrawlerWorkerActor(
     //  3. filter out binary content from the extracted urls
     //  4. store content into the DB
     //  5. request next url
-    var pages = List.empty[PageRow]
-    val content = browser.getPageSource(url.url.get)
-    
-    pages
+    val obtainedPage = browser.getPageSource(inputPage)
+    logger.info(s"obtained page: $obtainedPage ")
+    val extractor = new ExtractFromHTML(obtainedPage, site)
+    val pageImages = extractor.getImgs
+//    val page = extractor.getPageLinks
+//    page.foreach(link => logger.info(s"$link"))
+
+    val pageLinks = dbService.insertPage(extractor.getPageLinks) // TODO: continue storing precedure, idea: make this into a single transaction
+//    val pageData = browser.getPageData(extractor.getPageData)
+//    val (page, imgs, data) = dbService.insertPageWithContent(obtainedPage, pageImages, pageData)
+//    val links: List[LinkRow] = dbService.linkPages(page, pageLinks)
+//    links.foreach(link => logger.info(s"$link"))
+    pageLinks
   }
 }

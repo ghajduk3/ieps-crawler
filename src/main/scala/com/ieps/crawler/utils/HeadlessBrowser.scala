@@ -1,10 +1,13 @@
 package com.ieps.crawler.utils
 
+import java.io.InputStream
 import java.net.{HttpURLConnection, MalformedURLException, URL, UnknownHostException}
 import java.util.logging.Level
 
 import com.gargoylesoftware.htmlunit._
+import com.ieps.crawler.db.Tables.{PageDataRow, PageRow}
 import com.typesafe.scalalogging.StrictLogging
+
 /*
 
 import io.github.bonigarcia.wdm.WebDriverManager
@@ -50,36 +53,51 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     * @param url: String
     * @return (statusCode: Option[Int], loadTime: Option[Long], contentType: Option[String], content: Option[String]
     */
-  def getPageSource(url: String): (Int, Option[Long], Option[String], Option[String]) = {
+//  def getPageSource(pageRow: PageRow): (Int, Option[Long], Option[String], Option[String]) = {
+  def getPageSource(pageRow: PageRow): PageRow = {
     try {
-      val response: Page = webClient.getPage(url)
+      val response: Page = webClient.getPage(pageRow.url.get)
       val webResponse: WebResponse = response.getWebResponse
       val statusCode = webResponse.getStatusCode
       val htmlContent = webResponse.getContentAsString
       val htmlContentType = webResponse.getContentType
-      val loadTime = webResponse.getLoadTime
+      val loadTime = webResponse.getLoadTime // TODO
 
-      (statusCode, Some(loadTime), Some(htmlContentType), Some(htmlContent))
+//      (statusCode, Some(loadTime), Some(htmlContentType), Some(htmlContent))
+      pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some(htmlContentType))
     } catch {
       case e: FailingHttpStatusCodeException =>
-        (e.getStatusCode, None, None, None)
+        pageRow.copy(httpStatusCode = Some(e.getStatusCode))
       case _: UnknownHostException =>
-        (404, None, None, None)
-      case _: MalformedURLException=>
-        (400, None, None, None)
+        pageRow.copy(httpStatusCode = Some(404))
+      case _ @(_: MalformedURLException| _: Exception) =>
+        pageRow.copy(httpStatusCode= Some(400))
     }
   }
 
-  def getHTTPStatus(url: String): Int = {
+  private def toByteArray(inputStream: InputStream): Array[Byte] = {
+    Stream.continually(inputStream.read).takeWhile(_ != -1).map(_.toByte).toArray
+  }
+
+  def getPageData(pageRow: PageRow): PageDataRow = {
+    val pageDataRow = PageDataRow(-1, Some(pageRow.id))
     try {
-      HttpURLConnection.setFollowRedirects(true)
-      val connection: HttpURLConnection = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
-      connection.setRequestMethod("GET")
-      connection.getResponseCode
+      val response: Page = webClient.getPage(pageRow.url.get)
+      val webResponse: WebResponse = response.getWebResponse
+      val contentType = webResponse.getContentType
+      val contentData = toByteArray(webResponse.getContentAsStream)
+      pageDataRow.copy(dataTypeCode = Some(contentType), data = Some(contentData))
     } catch {
-      case e: Exception =>
-        logger.error(s"An error occurred: ${e.toString}")
-        500 // whenever there is an error -> not my fault
+      case e: FailingHttpStatusCodeException =>
+        null
+      case _: UnknownHostException =>
+        null
+      case _ @(_: MalformedURLException| _: Exception) =>
+        null
     }
+  }
+
+  def getPageData(pageRows: List[PageRow]): List[PageDataRow] = {
+    pageRows.map(getPageData).filter(_ != null)
   }
 }

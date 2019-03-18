@@ -1,7 +1,9 @@
 package com.ieps.crawler.db
 
+import com.ieps.crawler
+import com.ieps.crawler.db
 import com.ieps.crawler.db.Tables._
-import slick.dbio.DBIO
+import slick.dbio.{DBIO, Effect}
 import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.ExecutionContext
@@ -37,6 +39,9 @@ object CrawlerDIO {
   // insert statements
   def insertSite(site: SiteRow): DBIO[SiteRow] = (Query.writeSite += site).transactionally
   def insertPage(page: PageRow): DBIO[PageRow] = (Query.writePage += page).transactionally
+  def insertPage(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = (Query.writePage ++= pages).transactionally
+  def insertPage(pages: List[PageRow]): DBIO[Seq[PageRow]] = insertPage(pages.toSeq)
+//  def insertPage(pages: List[PageRow]): DBIO[List[PageRow]] = DBIO.sequence(pages.map(page => Query.writePage += page)).transactionally
   def insertOrUpdatePage(page: PageRow): DBIO[PageRow] = {
     val query = Page.filter(_.id === page.id)
     val existsAction = query.exists.result
@@ -52,9 +57,10 @@ object CrawlerDIO {
     } yield result).transactionally
   }
 
-  def insertPages(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = Query.writePage ++= pages
-  def insertLink(link: LinkRow): DBIO[LinkRow] = Query.writeLink += link
-  def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id))
+  def insertLink(link: LinkRow): DBIO[LinkRow] = (Query.writeLink += link).transactionally
+  def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id)).transactionally
+  def linkPages(fromPage: PageRow, toPages: List[PageRow]): DBIO[List[LinkRow]] =
+    DBIO.sequence(toPages.map(toPage => insertLink(LinkRow(fromPage.id, toPage.id)))).transactionally
   def insertImage(image: ImageRow): DBIO[ImageRow] = Query.writeImage += image
   def insertImages(images: Seq[ImageRow]): DBIO[Seq[ImageRow]] = Query.writeImage ++= images
   def insertPageData(pageData: PageDataRow): DBIO[PageDataRow] = Query.writePageData += pageData
@@ -72,7 +78,7 @@ object CrawlerDIO {
 
   def insertSiteWithPages(site: SiteRow, pages: Seq[PageRow]): DBIO[(SiteRow, Seq[PageRow])] = for {
     site <- insertSite(site)
-    page <- insertPages(pages.map(page => page.copy(siteId = Some(site.id))))
+    page <- insertPage(pages.map(page => page.copy(siteId = Some(site.id))))
   } yield (site, page)
 
   def insertPageWithContent(

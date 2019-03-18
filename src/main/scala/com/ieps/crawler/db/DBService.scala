@@ -37,6 +37,12 @@ class DBService(dbConfig: String = "local") {
   def insertPage(page: PageRow): PageRow =
     Await.result(insertPageFuture(page), timeout)
 
+  def insertPageFuture(pages: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.insertPage(pages))
+
+  def insertPage(pages: List[PageRow]): Seq[PageRow] =
+    Await.result(insertPageFuture(pages), timeout)
+
   // bulk insert
   def insertSiteWithPageFuture(site: SiteRow, page: PageRow): Future[(SiteRow, PageRow)] =
     db.run(CrawlerDIO.insertSiteWithPage(site, page))
@@ -59,8 +65,17 @@ class DBService(dbConfig: String = "local") {
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))
 
+  def linkPagesFuture(fromPage: PageRow, toPages: List[PageRow]): Future[List[LinkRow]] =
+    db.run(CrawlerDIO.linkPages(fromPage, toPages))
+
   def linkPages(fromPage: PageRow, toPage: PageRow): LinkRow =
     Await.result(linkPagesFuture(fromPage, toPage), timeout)
+
+  def linkPages(fromPage: PageRow, toPages: List[PageRow]): List[LinkRow] =
+    Await.result(linkPagesFuture(fromPage, toPages), timeout)
+
+  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): List[LinkRow] =
+    Await.result(linkPagesFuture(fromPage, toPages.toList), timeout)
 
   // bulk read
   def getPageLinksFuture(id: Int): Future[(PageRow, Seq[PageRow])] =
