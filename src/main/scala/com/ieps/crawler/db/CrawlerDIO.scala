@@ -57,10 +57,17 @@ object CrawlerDIO {
     } yield result).transactionally
   }
 
+  def insertOrUpdatePage(pages: List[PageRow]): DBIO[List[PageRow]] =
+    DBIO.sequence(pages.map(page => insertOrUpdatePage(page))).transactionally
+
+  def insertOrUpdatePage(pages: Seq[PageRow]): DBIO[List[PageRow]] =
+    insertOrUpdatePage(pages.toList)
+
   def insertLink(link: LinkRow): DBIO[LinkRow] = (Query.writeLink += link).transactionally
   def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id)).transactionally
   def linkPages(fromPage: PageRow, toPages: List[PageRow]): DBIO[List[LinkRow]] =
     DBIO.sequence(toPages.map(toPage => insertLink(LinkRow(fromPage.id, toPage.id)))).transactionally
+  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): DBIO[List[LinkRow]] = linkPages(fromPage, toPages.toList)
   def insertImage(image: ImageRow): DBIO[ImageRow] = Query.writeImage += image
   def insertImages(images: Seq[ImageRow]): DBIO[Seq[ImageRow]] = Query.writeImage ++= images
   def insertPageData(pageData: PageDataRow): DBIO[PageDataRow] = Query.writePageData += pageData
@@ -84,13 +91,16 @@ object CrawlerDIO {
   def insertPageWithContent(
      page: PageRow,
      images: Seq[ImageRow],
-     pageDatum: Seq[PageDataRow]
-  ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
+     pageDatum: Seq[PageDataRow],
+     pageLinks: Seq[PageRow]
+  ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow])] =
     for {
       insertedPage      <- insertOrUpdatePage(page) // might cause a problem cause it's of type Option[PageRow] --> CAREFUL
       insertedImages    <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id))))
       insertedPageData  <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id))))
-    } yield(insertedPage, insertedImages, insertedPageData)
+      insertedLinks     <- insertOrUpdatePage(pageLinks)
+      _ <- linkPages(insertedPage, insertedLinks) // link the inserted pages
+    } yield(insertedPage, insertedImages, insertedPageData, insertedLinks)
 
   object Query {
     import Tables._

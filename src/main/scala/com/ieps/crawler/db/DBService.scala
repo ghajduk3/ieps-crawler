@@ -5,10 +5,9 @@ import slick.jdbc.PostgresProfile.api._
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
-class DBService(dbConfig: String = "local") {
+class DBService(db: Database) {
   import Tables._
 
-  val db = Database.forConfig(dbConfig)
   implicit val timeout: FiniteDuration = new FiniteDuration(1, MINUTES)
 
   // Site
@@ -43,6 +42,12 @@ class DBService(dbConfig: String = "local") {
   def insertPage(pages: List[PageRow]): Seq[PageRow] =
     Await.result(insertPageFuture(pages), timeout)
 
+  def insertOrUpdatePageFuture(pages: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.insertOrUpdatePage(pages))
+
+  def insertOrUpdatePage(pages: List[PageRow]): Seq[PageRow] =
+    Await.result(insertOrUpdatePageFuture(pages), timeout)
+
   // bulk insert
   def insertSiteWithPageFuture(site: SiteRow, page: PageRow): Future[(SiteRow, PageRow)] =
     db.run(CrawlerDIO.insertSiteWithPage(site, page))
@@ -56,11 +61,11 @@ class DBService(dbConfig: String = "local") {
   def insertSiteWithPages(site: SiteRow, page: Seq[PageRow]): (SiteRow, Seq[PageRow]) =
     Await.result(insertSiteWithPagesFuture(site, page), timeout)
 
-  def insertPageWithContentFuture(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow]): Future[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
-    db.run(CrawlerDIO.insertPageWithContent(page, images, pageDatum))
+  def insertPageWithContentFuture(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): Future[(PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow])] =
+    db.run(CrawlerDIO.insertPageWithContent(page, images, pageDatum, pageLinks))
 
-  def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow]) =
-    Await.result(insertPageWithContentFuture(page, images, pageDatum), timeout)
+  def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow]) =
+    Await.result(insertPageWithContentFuture(page, images, pageDatum, pageLinks), timeout)
 
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))
@@ -98,6 +103,4 @@ class DBService(dbConfig: String = "local") {
 
   def getPageContent(page: PageRow): (Seq[ImageRow], Seq[PageDataRow]) =
     Await.result(getPageContentFuture(page.id), timeout)
-
-  def closeDb(): Unit = db.close()
 }

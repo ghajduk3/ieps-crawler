@@ -1,25 +1,26 @@
 package com.ieps.crawler
 
-import java.io._
-
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.CoordinatedShutdown.JvmExitReason
+import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import com.ieps.crawler.actors.CrawlerWorkerActor
 import com.ieps.crawler.actors.WorkDelegatorActor.ProcessNextPage
-import com.ieps.crawler.db.DBService
-import com.ieps.crawler.utils.HeadlessBrowser
 import com.typesafe.scalalogging.StrictLogging
+import sun.misc.{Signal, SignalHandler}
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
+import slick.jdbc.PostgresProfile.api.Database
 
 object CrawlerApp extends App with StrictLogging {
 
   import db.Tables._
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val actorSystem: ActorSystem = ActorSystem("crawler")
-  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1"))
+  val dbConnection = Database.forConfig("local")
+  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection))
 
-  val siteRow = SiteRow(1, Some("https://e-uprava.gov.si"))
-  val pageRow = PageRow(id = -1, url=Some("https://e-uprava.gov.si"))
+  val siteRow = SiteRow(1, Some("https://www.vijesti.me"))
+  val pageRow = PageRow(id = -1, url=Some("https://www.vijesti.me"))
 
   crawlerWorker ! ProcessNextPage(pageRow, siteRow)
   /*
@@ -47,4 +48,12 @@ object CrawlerApp extends App with StrictLogging {
       e.printStackTrace()
   }
   */
+
+  Signal.handle(new Signal("INT"), new SignalHandler() {
+    def handle(sig: Signal) {
+      logger.info(s"Shutting down.")
+      dbConnection.close()
+      Await.result(CoordinatedShutdown(actorSystem).run(JvmExitReason), 30 seconds)
+    }
+  })
 }

@@ -1,41 +1,14 @@
 package com.ieps.crawler.utils
 
 import java.io.InputStream
-import java.net.{HttpURLConnection, MalformedURLException, URL, UnknownHostException}
+import java.net.{MalformedURLException, UnknownHostException}
 import java.util.logging.Level
 
 import com.gargoylesoftware.htmlunit._
-import com.ieps.crawler.db.Tables.{PageDataRow, PageRow}
+import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow}
 import com.typesafe.scalalogging.StrictLogging
 
-/*
-
-import io.github.bonigarcia.wdm.WebDriverManager
-import org.openqa.selenium.WebDriver
-import org.openqa.selenium.chrome.ChromeDriver
-import org.openqa.selenium.chrome.ChromeOptions
-import org.openqa.selenium.logging.LogEntries
-import org.openqa.selenium.logging.LogEntry
-import org.openqa.selenium.logging.LogType
-import org.openqa.selenium.logging.LoggingPreferences
-import org.openqa.selenium.remote.CapabilityType
-import org.openqa.selenium.remote.DesiredCapabilities
-*/
-
-
 class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
-
-  /* // selenium stuff
-  WebDriverManager.chromedriver().setup()
-  val driverOptions: ChromeOptions = new ChromeOptions
-  driverOptions.addArguments("--headless")
-  val capabilities: DesiredCapabilities = DesiredCapabilities.chrome()
-  capabilities.setCapability(ChromeOptions.CAPABILITY, driverOptions)
-  val loggingPreferences: LoggingPreferences = new LoggingPreferences()
-  loggingPreferences.enable(LogType.PERFORMANCE, Level.ALL)
-  capabilities.setCapability(CapabilityType.LOGGING_PREFS, loggingPreferences)
-  val driver: WebDriver = new ChromeDriver(capabilities)
-  */
 
   import org.apache.commons.logging.LogFactory
 
@@ -53,7 +26,6 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     * @param url: String
     * @return (statusCode: Option[Int], loadTime: Option[Long], contentType: Option[String], content: Option[String]
     */
-//  def getPageSource(pageRow: PageRow): (Int, Option[Long], Option[String], Option[String]) = {
   def getPageSource(pageRow: PageRow): PageRow = {
     try {
       val response: Page = webClient.getPage(pageRow.url.get)
@@ -61,10 +33,8 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
       val statusCode = webResponse.getStatusCode
       val htmlContent = webResponse.getContentAsString
       val htmlContentType = webResponse.getContentType
-      val loadTime = webResponse.getLoadTime // TODO
-
-//      (statusCode, Some(loadTime), Some(htmlContentType), Some(htmlContent))
-      pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some(htmlContentType))
+      val loadTime = webResponse.getLoadTime
+      pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some(htmlContentType), loadTime = Some(loadTime))
     } catch {
       case e: FailingHttpStatusCodeException =>
         pageRow.copy(httpStatusCode = Some(e.getStatusCode))
@@ -79,25 +49,42 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     Stream.continually(inputStream.read).takeWhile(_ != -1).map(_.toByte).toArray
   }
 
-  def getPageData(pageRow: PageRow): PageDataRow = {
-    val pageDataRow = PageDataRow(-1, Some(pageRow.id))
+  private def getData(url: String): (String, Array[Byte]) = {
     try {
-      val response: Page = webClient.getPage(pageRow.url.get)
+      val response: Page = webClient.getPage(url)
       val webResponse: WebResponse = response.getWebResponse
       val contentType = webResponse.getContentType
       val contentData = toByteArray(webResponse.getContentAsStream)
-      pageDataRow.copy(dataTypeCode = Some(contentType), data = Some(contentData))
+      (contentType, contentData)
     } catch {
       case e: FailingHttpStatusCodeException =>
-        null
+        (null, null)
       case _: UnknownHostException =>
-        null
+        (null, null)
       case _ @(_: MalformedURLException| _: Exception) =>
-        null
+        (null, null)
     }
+  }
+
+  private def getPageData(pageRow: PageRow): PageDataRow = {
+    if(pageRow.url.isDefined) {
+      val (contentType, contentData) = getData(pageRow.url.get)
+      PageDataRow(-1, Some(pageRow.id), dataTypeCode = Some(contentType), data = Some(contentData))
+    } else null
   }
 
   def getPageData(pageRows: List[PageRow]): List[PageDataRow] = {
     pageRows.map(getPageData).filter(_ != null)
+  }
+
+  private def getImageData(imageRow: ImageRow): ImageRow = {
+    if(imageRow.filename.isDefined) {
+      val (contentType, contentData) = getData(imageRow.filename.get)
+      imageRow.copy(contentType = Some(contentType), data = Some(contentData))
+    } else null
+  }
+
+  def getImageData(imageRows: List[ImageRow]): List[ImageRow] = {
+    imageRows.map(getImageData).filter(_ != null)
   }
 }

@@ -25,9 +25,11 @@ create table crawldb.page (
 	url                  varchar(3000)  ,
 	html_content         text  ,
 	http_status_code     integer  ,
+	load_time						 bigint  ,
 	accessed_time        timestamp  ,
-	constraint pk_page_id primary key ( id ),
-	constraint unq_url_idx unique ( url )
+	stored_time        	 timestamp  ,
+	constraint pk_page_id primary key ( id )
+-- 	constraint unq_url_idx unique ( url )
  );
 
 create index "idx_page_site_id" on crawldb.page ( site_id );

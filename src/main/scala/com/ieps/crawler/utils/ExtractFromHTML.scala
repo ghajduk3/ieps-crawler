@@ -17,7 +17,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
   //method that gets src from <img> tags
-  def getImgs: List[ImageRow] = {
+  def getImages: List[ImageRow] = {
     val imgs = doc.select("img[src]").asScala
     var newImages = List.empty[ImageRow]
     imgs.foreach(img => {
@@ -26,7 +26,8 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         newImages = newImages :+ ImageRow(-1, Some(pageSource.id), Some(actualImg), Some(conType(actualImg)))
       }
       catch {
-        case _: Exception =>
+        case e: Exception =>
+          logger.error(s"Error occurred while extracting image: ${e.getMessage}")
       }
     })
     newImages
@@ -40,7 +41,8 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         val actualLink = extractLink(link.attr("href"))
         allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualLink))
       } catch {
-        case _: Exception =>
+        case e: Exception =>
+          logger.error(s"Error occurred while extracting link: ${e.getMessage}")
       }
     })
     val onclick = doc.select("*")
@@ -50,7 +52,8 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualClick))
       }
       catch {
-        case _: Exception =>
+        case e: Exception =>
+          logger.error(s"Error occurred while extracting link: ${e.getMessage}")
       }
     })
     allLinks
@@ -80,15 +83,16 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
     }
     catch {
       case _: Exception =>
-        var url1: String = if (url.contains(siteSource.domain.get) && (url.contains("http://") || url.contains("http://"))) {
+        logger.info(s"$url")
+        var url1: String = if (url.contains(siteSource.domain.get) && (url.contains("http://") || url.contains("https://"))) {
           url: String
         } else if (url.contains(siteSource.domain.get)) {
           "http://" + url
         } else {
-          "http://" + siteSource.domain.get + url
+          siteSource.domain.get + url
         }
         url1 = Canonical.getCanonical(url1)
-        url1.replace(url1.takeRight(1),"")
+        url1
     }
   }
 
