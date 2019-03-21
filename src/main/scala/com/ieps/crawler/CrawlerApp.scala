@@ -4,7 +4,7 @@ import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import com.ieps.crawler.actors.CrawlerWorkerActor
 import com.ieps.crawler.actors.WorkDelegatorActor.ProcessNextPage
-import com.ieps.crawler.utils.BigQueue
+import com.ieps.crawler.utils.{BigQueue, Canonical}
 import com.typesafe.scalalogging.StrictLogging
 import sun.misc.{Signal, SignalHandler}
 
@@ -14,7 +14,15 @@ import slick.jdbc.PostgresProfile.api.Database
 
 object CrawlerApp extends App with StrictLogging {
 
+
   import db.Tables._
+  val noviCanonical = "https://www.vijesti.me/gojko/marko.html/"
+  val proba  = Canonical.extractDomain(noviCanonical)
+  logger.info(s"$proba")
+
+
+
+
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val actorSystem: ActorSystem = ActorSystem("ieps-crawler")
   val dbConnection = Database.forConfig("local")
@@ -25,6 +33,7 @@ object CrawlerApp extends App with StrictLogging {
   val pageRow = PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))
 
   crawlerWorker ! ProcessNextPage(pageRow, siteRow)
+
   /*
   try {
     val dbService = new DBService("local")

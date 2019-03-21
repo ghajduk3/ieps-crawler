@@ -5,9 +5,8 @@ version := "0.1"
 scalaVersion := "2.12.8"
 scalacOptions += "-Ypartial-unification" // 2.11.9+
 resolvers ++= Seq(
-  "Mesosphere Public Repository" at "http://downloads.mesosphere.io/maven"
+  "BigQueue Repo" at "https://raw.github.com/bulldog2011/bulldog-repo/master/repo/releases"
 )
-
 lazy val root = (project in file("."))
   .settings(
     name := "IEPS-crawler",
@@ -31,7 +30,7 @@ lazy val root = (project in file("."))
       "org.joda" % "joda-convert" % "1.7",
       "com.github.nscuro" % "webdriver-manager" % "0.2.3",
       "net.sourceforge.htmlunit" % "htmlunit" % "2.32",
-      "com.leansoft" % "bigqueue" % "0.7.0",
+      "com.leansoft" % "bigqueue" % "0.7.2",
       "io.argonaut" %% "argonaut" % "6.2.2"
     )
   )
