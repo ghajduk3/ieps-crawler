@@ -48,6 +48,12 @@ class DBService(db: Database) {
   def insertOrUpdatePage(pages: List[PageRow]): Seq[PageRow] =
     Await.result(insertOrUpdatePageFuture(pages), timeout)
 
+  def insertIfNotExistsByUrlFuture(page: PageRow): Future[PageRow] =
+    db.run(CrawlerDIO.insertIfNotExistsByUrl(page))
+
+  def insertIfNotExistsByUrl(page: PageRow): PageRow =
+    Await.result(insertIfNotExistsByUrlFuture(page), timeout)
+
   // bulk insert
   def insertSiteWithPageFuture(site: SiteRow, page: PageRow): Future[(SiteRow, PageRow)] =
     db.run(CrawlerDIO.insertSiteWithPage(site, page))
@@ -73,10 +79,10 @@ class DBService(db: Database) {
   def pageExists(page: PageRow): Boolean =
     Await.result(pageExistsFuture(page), timeout)
 
-  def pageExistsFuture(page: List[PageRow]): Future[List[Boolean]] =
+  def pageExistsFuture(page: List[PageRow]): Future[Seq[PageRow]] =
     db.run(CrawlerDIO.pageExists(page))
 
-  def pageExists(page: List[PageRow]): List[Boolean] =
+  def pageExists(page: List[PageRow]): Seq[PageRow] =
     Await.result(pageExistsFuture(page), timeout)
 
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =

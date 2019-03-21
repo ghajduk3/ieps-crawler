@@ -15,8 +15,8 @@ class DuplicateLinks(db: Database) extends StrictLogging {
   }
 
   def deduplicatePages(pageRows: List[PageRow]): List[PageRow] = {
-    val uniqueUrls = pageRows.zip(dbService.pageExists(pageRows)).filter(!_._2).map(_._1)
+//    val uniqueUrls = pageRows.zip(dbService.pageExists(pageRows)).filter(!_._2).map(_._1)
+    pageRows.filter(page => !dbService.pageExists(pageRows).toList.map(_.url).contains(page.url))
     // TODO: add hashing and LSH
-    uniqueUrls
   }
 }

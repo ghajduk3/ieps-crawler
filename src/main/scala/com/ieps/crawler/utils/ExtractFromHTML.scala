@@ -11,7 +11,7 @@ import scala.collection.JavaConverters._
 
 
 class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLogging {
-  logger.info(s"Extracting for: ${pageSource.url}")
+//  logger.info(s"Extracting for: ${pageSource.url}")
 
   var doc: Document = Jsoup.parse(pageSource.htmlContent.get)
   val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx")

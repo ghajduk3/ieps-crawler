@@ -1,5 +1,7 @@
 package com.ieps.crawler.actors
 
+import java.util.concurrent.ThreadLocalRandom
+
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.DBService
@@ -9,7 +11,9 @@ import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 import slick.jdbc.PostgresProfile.api.Database
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
+import scala.language.postfixOps
 
 object CrawlerWorkerActor {
   def props(workerId: String, db: Database, queue: BigQueue) = Props(new CrawlerWorkerActor(workerId, db, queue))
@@ -22,17 +26,19 @@ class CrawlerWorkerActor(
     workerId: String,
     db: Database,
     queue: BigQueue,
-    debug: Boolean = false
+    debug: Boolean = true
   ) extends Actor
     with StrictLogging {
 
   import CrawlerWorkerActor._
   import WorkDelegatorActor._
+  private implicit val executionContext: ExecutionContext = context.system.dispatchers.lookup("thread-pool-dispatcher")
   private implicit val delay: FiniteDuration = 4 seconds
 
   private val logInstanceIdentifier = s"CrawlerWorker_$workerId:"
   private var inIdleState: DateTime = DateTime.now()
   private val browser = new HeadlessBrowser()
+//  private val db = Database.forConfig("local")
   private val dbService = new DBService(db)
   private val duplicate = new DuplicateLinks(db)
 
@@ -60,50 +66,44 @@ class CrawlerWorkerActor(
         page = pageRow.copy(siteId = Some(site.id))
       }
       val links: Seq[PageRow] = processPage(page, site, downloadData = false)
-      if(links.nonEmpty) {
-        logger.info(s"${links.head}")
+      if (links.nonEmpty) {
         links.foreach(queue.enqueue)
       }
-      val items = for {
-        item <- queue.dequeue()
-      } yield item
-      items.foreach(item => logger.info(s"next item: $item"))
+      /*while(!queue.isEmpty) {
+        logger.info(s"$logInstanceIdentifier next item: ${queue.dequeue()}")
+        Thread.sleep(200)
+      }*/
 //      if (debug) links.foreach(link => logger.debug(s"$logInstanceIdentifier got link: $link"))
       // after wrapping up with processing, update the idle state
       inIdleState = DateTime.now()
-
+      logger.info(s"$logInstanceIdentifier Queue is empty.")
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
   }
 
   def processPage(inputPage: PageRow, site:SiteRow, downloadData: Boolean): Seq[PageRow] = {
-    // TODO: Process the url:
-    //  [x] extract the HTML code via Selenium
-    //  [x] extract:
-    //      [x] urls (<a>, location) - add them into the frontier
-    //      [x] images (<img>)
-    //  [x] filter out binary content from the extracted urls
-    //  [x] store content into the DB
-    //  [?] request next url
     val obtainedPage = browser.getPageSource(inputPage)
-    logger.debug(s"$obtainedPage")
-    val extractor = new ExtractFromHTML(obtainedPage, site)
-    var pageImages: Seq[ImageRow] = Seq()
-    var pageData: Seq[PageDataRow] = Seq()
-    if (downloadData) {
-      logger.info(s"$logInstanceIdentifier Getting images...")
-      pageImages = browser.getImageData(extractor.getImages)
-      logger.info(s"$logInstanceIdentifier Getting page data...")
-      pageData = browser.getPageData(extractor.getPageData)
-    }
-    logger.info(s"$logInstanceIdentifier Getting page links...")
-    val pageLinks = duplicate.deduplicatePages(extractor.getPageLinks)
-    if (debug) {
-      logger.info(s"Unique pageLinks size: ${pageLinks.size}")
-      pageLinks.foreach(link => logger.info(s"$link"))
-    }
-    logger.info(s"$logInstanceIdentifier Storing into the database...")
-    val (page, imgs, data, links) = dbService.insertPageWithContent(obtainedPage, pageImages, pageData, pageLinks)
-    logger.info(s"$logInstanceIdentifier Done, continuing...")
-    links
+    logger.info(s"$logInstanceIdentifier Status code: ${obtainedPage.httpStatusCode}")
+    if(obtainedPage.httpStatusCode.get >= 200 && obtainedPage.httpStatusCode.get < 300) {
+      val extractor = new ExtractFromHTML(obtainedPage, site)
+      var pageImages: Seq[ImageRow] = Seq()
+      var pageData: Seq[PageDataRow] = Seq()
+      if (downloadData) {
+        logger.info(s"$logInstanceIdentifier Getting images...")
+        pageImages = browser.getImageData(extractor.getImages)
+        logger.info(s"$logInstanceIdentifier Getting page data...")
+        pageData = browser.getPageData(extractor.getPageData)
+      }
+      logger.info(s"$logInstanceIdentifier Getting page links...")
+      val pageLinks = duplicate.deduplicatePages(extractor.getPageLinks)
+      if (debug) {
+        logger.info(s"$logInstanceIdentifier Unique pageLinks size: ${pageLinks.size}")
+        //      pageLinks.foreach(link => logger.debug(s"$link"))
+      }
+      logger.info(s"$logInstanceIdentifier Storing into the database...")
+      Thread.sleep(ThreadLocalRandom.current().nextLong(10000))
+      val (page, imgs, data, links) = dbService.insertPageWithContent(obtainedPage, pageImages, pageData, pageLinks)
+      logger.info(s"$logInstanceIdentifier Done, continuing...")
+      links
+    } else List.empty
   }
 }

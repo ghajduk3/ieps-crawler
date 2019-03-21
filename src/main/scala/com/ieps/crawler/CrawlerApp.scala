@@ -1,5 +1,7 @@
 package com.ieps.crawler
 
+import java.util.concurrent.ThreadLocalRandom
+
 import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import com.ieps.crawler.actors.CrawlerWorkerActor
@@ -19,12 +21,15 @@ object CrawlerApp extends App with StrictLogging {
   val actorSystem: ActorSystem = ActorSystem("ieps-crawler")
   val dbConnection = Database.forConfig("local")
   val queue = new BigQueue("./queue")
-  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection, queue))
+  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection, queue).withDispatcher("thread-pool-dispatcher"))
+  val crawlerWorker2: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("2", dbConnection, queue).withDispatcher("thread-pool-dispatcher"))
 
-  val siteRow = SiteRow(1, Some("https://www.vijesti.me"))
+  val siteRow = SiteRow(1, Some("https://e-uprava.gov.si/"))
   val pageRow = PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))
+  val pageRow2 = PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))
 
   crawlerWorker ! ProcessNextPage(pageRow, siteRow)
+  crawlerWorker2 ! ProcessNextPage(pageRow2, siteRow)
   /*
   try {
     val dbService = new DBService("local")
