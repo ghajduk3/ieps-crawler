@@ -67,6 +67,18 @@ class DBService(db: Database) {
   def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow]) =
     Await.result(insertPageWithContentFuture(page, images, pageDatum, pageLinks), timeout)
 
+  def pageExistsFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExists(page))
+
+  def pageExists(page: PageRow): Boolean =
+    Await.result(pageExistsFuture(page), timeout)
+
+  def pageExistsFuture(page: List[PageRow]): Future[List[Boolean]] =
+    db.run(CrawlerDIO.pageExists(page))
+
+  def pageExists(page: List[PageRow]): List[Boolean] =
+    Await.result(pageExistsFuture(page), timeout)
+
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))
 

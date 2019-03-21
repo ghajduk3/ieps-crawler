@@ -4,6 +4,9 @@ version := "0.1"
 
 scalaVersion := "2.12.8"
 scalacOptions += "-Ypartial-unification" // 2.11.9+
+resolvers ++= Seq(
+  "Mesosphere Public Repository" at "http://downloads.mesosphere.io/maven"
+)
 
 lazy val root = (project in file("."))
   .settings(
@@ -26,14 +29,10 @@ lazy val root = (project in file("."))
       "org.jsoup" % "jsoup" % "1.11.3",
       "info.debatty" % "java-lsh" % "0.11",
       "org.joda" % "joda-convert" % "1.7",
-//      "org.seleniumhq.selenium" % "selenium-server" % "3.141.59",
-//      "org.seleniumhq.selenium" % "selenium-java" % "3.141.59",
-//      "org.seleniumhq.selenium" % "selenium-remote-driver" % "3.141.59",
-//      "org.seleniumhq.selenium" % "selenium-api" % "3.141.59",
-//      "io.github.bonigarcia" % "webdrivermanager" % "3.3.0"
       "com.github.nscuro" % "webdriver-manager" % "0.2.3",
-      "net.sourceforge.htmlunit" % "htmlunit" % "2.32"
-
+      "net.sourceforge.htmlunit" % "htmlunit" % "2.32",
+      "com.leansoft" % "bigqueue" % "0.7.0",
+      "io.argonaut" %% "argonaut" % "6.2.2"
     )
   )
 

@@ -10,3 +10,4 @@ config/spark-defaults.conf
 .idea/
 .settings/
 .DS_STORE*
+queue/*

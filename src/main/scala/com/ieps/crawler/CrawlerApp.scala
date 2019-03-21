@@ -4,6 +4,7 @@ import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import com.ieps.crawler.actors.CrawlerWorkerActor
 import com.ieps.crawler.actors.WorkDelegatorActor.ProcessNextPage
+import com.ieps.crawler.utils.BigQueue
 import com.typesafe.scalalogging.StrictLogging
 import sun.misc.{Signal, SignalHandler}
 
@@ -15,12 +16,13 @@ object CrawlerApp extends App with StrictLogging {
 
   import db.Tables._
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
-  val actorSystem: ActorSystem = ActorSystem("crawler")
+  val actorSystem: ActorSystem = ActorSystem("ieps-crawler")
   val dbConnection = Database.forConfig("local")
-  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection))
+  val queue = new BigQueue("./queue")
+  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection, queue))
 
   val siteRow = SiteRow(1, Some("https://www.vijesti.me"))
-  val pageRow = PageRow(id = -1, url=Some("https://www.vijesti.me"))
+  val pageRow = PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))
 
   crawlerWorker ! ProcessNextPage(pageRow, siteRow)
   /*
@@ -52,6 +54,7 @@ object CrawlerApp extends App with StrictLogging {
   Signal.handle(new Signal("INT"), new SignalHandler() {
     def handle(sig: Signal) {
       logger.info(s"Shutting down.")
+      // TODO: graceful actor shut-down
       dbConnection.close()
       Await.result(CoordinatedShutdown(actorSystem).run(JvmExitReason), 30 seconds)
     }

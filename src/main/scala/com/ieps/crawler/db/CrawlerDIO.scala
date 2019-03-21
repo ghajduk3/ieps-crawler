@@ -56,12 +56,14 @@ object CrawlerDIO {
       }
     } yield result).transactionally
   }
-
   def insertOrUpdatePage(pages: List[PageRow]): DBIO[List[PageRow]] =
     DBIO.sequence(pages.map(page => insertOrUpdatePage(page))).transactionally
-
   def insertOrUpdatePage(pages: Seq[PageRow]): DBIO[List[PageRow]] =
     insertOrUpdatePage(pages.toList)
+  def pageExists(pageRow: PageRow): DBIO[Boolean] =
+    Page.filter(page => page.url.isDefined && page.url === pageRow.url).exists.result
+  def pageExists(pageRow: List[PageRow]): DBIO[List[Boolean]] =
+    DBIO.sequence(pageRow.map(pageExists))
 
   def insertLink(link: LinkRow): DBIO[LinkRow] = (Query.writeLink += link).transactionally
   def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id)).transactionally

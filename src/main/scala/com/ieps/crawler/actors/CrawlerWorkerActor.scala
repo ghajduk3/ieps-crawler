@@ -2,18 +2,17 @@ package com.ieps.crawler.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
-import com.ieps.crawler.db.{DBService, Tables}
-import com.ieps.crawler.db.Tables.{LinkRow, PageRow, SiteRow}
-import com.ieps.crawler.utils.{ExtractFromHTML, HeadlessBrowser}
+import com.ieps.crawler.db.DBService
+import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
+import com.ieps.crawler.utils.{BigQueue, DuplicateLinks, ExtractFromHTML, HeadlessBrowser}
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 import slick.jdbc.PostgresProfile.api.Database
 
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.duration._
+import scala.concurrent.duration.{FiniteDuration, _}
 
 object CrawlerWorkerActor {
-  def props(workerId: String, db: Database) = Props(new CrawlerWorkerActor(workerId, db))
+  def props(workerId: String, db: Database, queue: BigQueue) = Props(new CrawlerWorkerActor(workerId, db, queue))
 
   case object WorkerStatusRequest
   case class WorkerStatusResponse(isIdle: Boolean, idleTime: FiniteDuration)
@@ -21,7 +20,9 @@ object CrawlerWorkerActor {
 
 class CrawlerWorkerActor(
     workerId: String,
-    db: Database
+    db: Database,
+    queue: BigQueue,
+    debug: Boolean = false
   ) extends Actor
     with StrictLogging {
 
@@ -33,6 +34,7 @@ class CrawlerWorkerActor(
   private var inIdleState: DateTime = DateTime.now()
   private val browser = new HeadlessBrowser()
   private val dbService = new DBService(db)
+  private val duplicate = new DuplicateLinks(db)
 
   private def getDuration(dateTime: DateTime): FiniteDuration = FiniteDuration(DateTime.now().minus(dateTime.getMillis).getMillis, MILLISECONDS)
 
@@ -45,9 +47,10 @@ class CrawlerWorkerActor(
 
     case ProcessNextPage(pageRow, site) =>
       logger.info(s"$logInstanceIdentifier Got a new pageRow to process: $pageRow")
+      // TODO: wait until duration > idleState
       //  remove the inIdleState
       inIdleState = null
-      var page: PageRow = pageRow.copy()
+      var page: PageRow = pageRow.copy() // TODO: add SHA hash as a field in `page` table
       if (page.siteId.isDefined) {
         if (pageRow.siteId.get != site.id) {
           logger.info(s"$logInstanceIdentifier Monkey business: page is not associated to site.")
@@ -56,36 +59,49 @@ class CrawlerWorkerActor(
       } else {
         page = pageRow.copy(siteId = Some(site.id))
       }
-      val links: Seq[PageRow] = processPage(page, site)
-      links.foreach(link => logger.info(s"$logInstanceIdentifier got link: $link"))
-
+      val links: Seq[PageRow] = processPage(page, site, downloadData = false)
+      if(links.nonEmpty) {
+        logger.info(s"${links.head}")
+        links.foreach(queue.enqueue)
+      }
+      val items = for {
+        item <- queue.dequeue()
+      } yield item
+      items.foreach(item => logger.info(s"next item: $item"))
+//      if (debug) links.foreach(link => logger.debug(s"$logInstanceIdentifier got link: $link"))
       // after wrapping up with processing, update the idle state
       inIdleState = DateTime.now()
 
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
   }
 
-  def processPage(inputPage: PageRow, site:SiteRow): Seq[PageRow] = {
+  def processPage(inputPage: PageRow, site:SiteRow, downloadData: Boolean): Seq[PageRow] = {
     // TODO: Process the url:
-    //  1. extract the HTML code via Selenium
-    //  2. extract:
-    //      - urls (<a>, location) - add them into the frontier
-    //      - images (<img>)
-    //  3. filter out binary content from the extracted urls
-    //  4. store content into the DB
-    //  5. request next url
+    //  [x] extract the HTML code via Selenium
+    //  [x] extract:
+    //      [x] urls (<a>, location) - add them into the frontier
+    //      [x] images (<img>)
+    //  [x] filter out binary content from the extracted urls
+    //  [x] store content into the DB
+    //  [?] request next url
     val obtainedPage = browser.getPageSource(inputPage)
-    logger.info(s"$obtainedPage")
+    logger.debug(s"$obtainedPage")
     val extractor = new ExtractFromHTML(obtainedPage, site)
-    logger.info(s"$logInstanceIdentifier Getting images:")
-    val pageImages = browser.getImageData(extractor.getImages)
-//    pageImages.foreach(image => logger.info(s"$image"))
-    logger.info(s"$logInstanceIdentifier Getting page data:")
-    val pageData = browser.getPageData(extractor.getPageData)
-    logger.info(s"$logInstanceIdentifier Getting page links:")
-    val pageLinks = extractor.getPageLinks
-    // TODO: filter duplicate pages here
-    logger.info(s"$logInstanceIdentifier Storing into the database:")
+    var pageImages: Seq[ImageRow] = Seq()
+    var pageData: Seq[PageDataRow] = Seq()
+    if (downloadData) {
+      logger.info(s"$logInstanceIdentifier Getting images...")
+      pageImages = browser.getImageData(extractor.getImages)
+      logger.info(s"$logInstanceIdentifier Getting page data...")
+      pageData = browser.getPageData(extractor.getPageData)
+    }
+    logger.info(s"$logInstanceIdentifier Getting page links...")
+    val pageLinks = duplicate.deduplicatePages(extractor.getPageLinks)
+    if (debug) {
+      logger.info(s"Unique pageLinks size: ${pageLinks.size}")
+      pageLinks.foreach(link => logger.info(s"$link"))
+    }
+    logger.info(s"$logInstanceIdentifier Storing into the database...")
     val (page, imgs, data, links) = dbService.insertPageWithContent(obtainedPage, pageImages, pageData, pageLinks)
     logger.info(s"$logInstanceIdentifier Done, continuing...")
     links

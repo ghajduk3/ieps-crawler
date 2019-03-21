@@ -39,17 +39,17 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
     links.foreach(link => {
       try {
         val actualLink = extractLink(link.attr("href"))
-        allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualLink))
+        allLinks = allLinks :+ PageRow(-1, None, Some("FRONTIER"), Some(actualLink))
       } catch {
         case e: Exception =>
           logger.error(s"Error occurred while extracting link: ${e.getMessage}")
       }
     })
-    val onclick = doc.select("*")
-    onclick.forEach(click => {
+    val onclick = doc.select("*").asScala
+    onclick.foreach(click => {
       try {
         val actualClick = extractLink(click.attr("onclick"))
-        allLinks = allLinks :+ PageRow(-1, Some(siteSource.id), Some("FRONTIER"), Some(actualClick))
+        allLinks = allLinks :+ PageRow(-1, None, Some("FRONTIER"), Some(actualClick))
       }
       catch {
         case e: Exception =>
@@ -83,7 +83,6 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
     }
     catch {
       case _: Exception =>
-        logger.info(s"$url")
         var url1: String = if (url.contains(siteSource.domain.get) && (url.contains("http://") || url.contains("https://"))) {
           url: String
         } else if (url.contains(siteSource.domain.get)) {

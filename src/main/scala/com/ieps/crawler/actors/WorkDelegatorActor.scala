@@ -9,7 +9,7 @@ object WorkDelegatorActor {
   def props(frontier: Object): Props = Props(new WorkDelegatorActor(frontier))
 
   case object GetNextURL
-  case class ProcessNextPage(pageRow: PageRow, siteRow: SiteRow) // TODO: Abstract the url in a class to have more content
+  case class ProcessNextPage(pageRow: PageRow, siteRow: SiteRow) // TODO: add wait duration
   case class InsertPage(url: String)
 }
 
