@@ -20,8 +20,11 @@ object CrawlerApp extends App with StrictLogging {
     val x = noviHtml.getImgs
     val y = noviHtml.getPageLinks
     val z = noviHtml.imgLink("http://www.vijesti.me/bundles/themes/swp/default-theme@xw69v1/img/logo.svg/")
-    logger.info(s"$x")
-    logger.info(s"$y")
+    val g = noviHtml.textFromHtml()
+    val pageHtml = new PageDuplicate(g)
+    val j= pageHtml.instminhash
+    logger.info(s"$g")
+    logger.info(s"$j")
 
 
     // list entities

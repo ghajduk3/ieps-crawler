@@ -8,7 +8,7 @@ import crawlercommons.filters.basic.BasicURLNormalizer
 object Canonical extends StrictLogging {
   var pattern_percent: Regex = "(%[0-9a-f]{2})".r
   var index_pages = Array("index.html", "index.htm", "index.shtml", "index.php", "default.html", "default.htm", "home.html", "home.htm", "index.php5", "index.php4", "index.cgi", "index.php3", "placeholder.html", "default.asp")
-  val extensions = Array(".html", ".htm" , ".htm",".php" , ".ppt" , ".pdf",".doc",".docx",".ppt",".pptx", ".php5" , ".php4" , ".cgi" ,".php3", ".asp" )
+  val extensions = Array(".html", ".htm" ,".php" , ".ppt" , ".pdf",".doc",".docx",".ppt",".pptx", ".php5" , ".php4" , ".cgi" ,".php3", ".asp",".jpg" , ".png" , ".jpeg" , ".svg", ".tiff" , ".gif" )
   def getCanonical(wildUrl: String): String = {
 
     val urlNormal: BasicURLNormalizer = new BasicURLNormalizer
@@ -22,9 +22,8 @@ object Canonical extends StrictLogging {
     if (url.getRef != null) {
       url1 = url1.replaceAll("#" + url.getRef, "")
     }
-    if (url.getHost.takeRight(1) != "/") {
-      url1 = url1 + "/"
-    }
+
+
 
     //removing default index pages
     for (i <- index_pages) {
@@ -32,17 +31,23 @@ object Canonical extends StrictLogging {
         url1 = url1.replace("/" + i, "")
       }
     }
+    if(url.getPath.takeRight(1) != "/" ){
+      url1 = url1 + "/"
+    }
 
     val c = urlNormal.filter(url1)
     val urli: URL = new URL(c)
     val uri: URI = new URI(urli.getProtocol, urli.getUserInfo, urli.getHost, urli.getPort, urli.getPath, urli.getQuery, urli.getRef)
     var urii = uri.toURL.toString
+
     for (i <- extensions) {
-      if(urii.endsWith(i)){
-        urii = urii.replace(urii.takeRight(1),"")
+      if(urii.endsWith(i + "/")){
+        urii = urii.substring(0,urii.length-1)
       }
     }
     urii
+
+
 
   }
 }

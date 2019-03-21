@@ -88,11 +88,22 @@ class ExtractFromHTM(pageSource: PageRow, siteSource: SiteRow) {
           "http://" + siteSource.domain.get + url
         }
         url1 = Canonical.getCanonical(url1)
-        url1.replace(url1.takeRight(1),"")
+        url1
+
     }
   }
 
   def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
+
+  def textFromHtml():String = {
+    doc.text()
+
+
+
+
+
+  }
+
 
 
 }
