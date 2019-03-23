@@ -4,6 +4,7 @@ import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
+import scala.util.{Failure, Success}
 
 class DBService(db: Database) {
   import Tables._
@@ -12,16 +13,39 @@ class DBService(db: Database) {
 
   // Site
   def getSiteByIdFuture(id: Int): Future[Option[SiteRow]] =
-    db.run(CrawlerDIO.findSiteById(id))
+    db.run(CrawlerDIO.findSiteByIdOption(id))
 
   def getSiteById(id: Int): Option[SiteRow] =
     Await.result(getSiteByIdFuture(id), timeout)
+
+  def getSiteByDomainFuture(domain: String): Future[Option[SiteRow]] =
+    db.run(CrawlerDIO.findPageByDomainOption(domain))
+
+  def getSiteByDomain(domain: String): Option[SiteRow] =
+    Await.result(getSiteByDomainFuture(domain), timeout)
 
   def insertSiteFuture(site: SiteRow): Future[SiteRow] =
     db.run(CrawlerDIO.insertSite(site))
 
   def insertSite(site: SiteRow): SiteRow =
     Await.result(insertSiteFuture(site), timeout)
+
+  def insertOrUpdateSiteFuture(site: SiteRow): Future[SiteRow] =
+    db.run(CrawlerDIO.insertOrUpdateSite(site))
+
+  def insertOrUpdateSite(site: SiteRow): Option[SiteRow] =
+    Await.ready[SiteRow](insertOrUpdateSiteFuture(site), timeout).value.get match {
+      case Success(result) => Some(result)
+      case Failure(exception) =>
+        exception.printStackTrace()
+        None
+    }
+
+  def insertIfNotExistsByDomainFuture(siteRow: SiteRow): Future[SiteRow] =
+    db.run(CrawlerDIO.insertIfNotExistsByDomain(siteRow))
+
+  def insertIfNotExistsByDomain(siteRow: SiteRow): SiteRow =
+    Await.result(insertIfNotExistsByDomainFuture(siteRow), timeout)
 
   // Page
   def getPageByIdFuture(id: Int): Future[PageRow] =

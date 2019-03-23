@@ -1,18 +1,18 @@
 package com.ieps.crawler
 
-import java.util.concurrent.ThreadLocalRandom
-
 import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
-import com.ieps.crawler.actors.CrawlerWorkerActor
+import com.ieps.crawler.actors.PageWorkerActor
+import com.ieps.crawler.actors.PageWorkerActor.StartWorker
 import com.ieps.crawler.actors.WorkDelegatorActor.ProcessNextPage
-import com.ieps.crawler.utils.BigQueue
+import com.ieps.crawler.queue.Queue.QueuePageEntry
+import com.ieps.crawler.queue.{DataQueue, PageQueue}
 import com.typesafe.scalalogging.StrictLogging
+import slick.jdbc.PostgresProfile.api.Database
 import sun.misc.{Signal, SignalHandler}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
-import slick.jdbc.PostgresProfile.api.Database
 
 object CrawlerApp extends App with StrictLogging {
 
@@ -20,16 +20,22 @@ object CrawlerApp extends App with StrictLogging {
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val actorSystem: ActorSystem = ActorSystem("ieps-crawler")
   val dbConnection = Database.forConfig("local")
-  val queue = new BigQueue("./queue")
-  val crawlerWorker: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("1", dbConnection, queue).withDispatcher("thread-pool-dispatcher"))
-  val crawlerWorker2: ActorRef = actorSystem.actorOf(CrawlerWorkerActor.props("2", dbConnection, queue).withDispatcher("thread-pool-dispatcher"))
+  val pageQueue = new PageQueue("./queue")
+  val dataQueue = new DataQueue("./queue")
+  val crawlerWorker: ActorRef = actorSystem.actorOf(PageWorkerActor.props("1", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
+  val crawlerWorker2: ActorRef = actorSystem.actorOf(PageWorkerActor.props("2", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
 
   val siteRow = SiteRow(1, Some("https://e-uprava.gov.si/"))
-  val pageRow = PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))
-  val pageRow2 = PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))
+  pageQueue.enqueueAll(List(
+//    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))),
+//    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))),
+//    QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("http://www.e-prostor.gov.si/")))
+  ))
 
-  crawlerWorker ! ProcessNextPage(pageRow, siteRow)
-  crawlerWorker2 ! ProcessNextPage(pageRow2, siteRow)
+  crawlerWorker ! StartWorker
+//  Thread.sleep(2000)
+  crawlerWorker2 ! StartWorker
   /*
   try {
     val dbService = new DBService("local")

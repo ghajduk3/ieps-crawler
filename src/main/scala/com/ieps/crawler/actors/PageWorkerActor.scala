@@ -6,7 +6,9 @@ import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.DBService
 import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
-import com.ieps.crawler.utils.{BigQueue, DuplicateLinks, ExtractFromHTML, HeadlessBrowser}
+import com.ieps.crawler.queue.Queue.{QueueDataEntry, QueuePageEntry}
+import com.ieps.crawler.queue.{DataQueue, PageQueue}
+import com.ieps.crawler.utils._
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 import slick.jdbc.PostgresProfile.api.Database
@@ -14,29 +16,31 @@ import slick.jdbc.PostgresProfile.api.Database
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
+import scala.util.{Failure, Success, Try}
 
-object CrawlerWorkerActor {
-  def props(workerId: String, db: Database, queue: BigQueue) = Props(new CrawlerWorkerActor(workerId, db, queue))
+object PageWorkerActor {
+  def props(workerId: String, db: Database, pageQueue: PageQueue, dataQueue: DataQueue) = Props(new PageWorkerActor(workerId, db, pageQueue, dataQueue))
 
+  case object StartWorker
   case object WorkerStatusRequest
   case class WorkerStatusResponse(isIdle: Boolean, idleTime: FiniteDuration)
 }
 
-class CrawlerWorkerActor(
+class PageWorkerActor(
     workerId: String,
     db: Database,
-    queue: BigQueue,
+    pageQueue: PageQueue,
+    dataQueue: DataQueue,
     debug: Boolean = true
   ) extends Actor
     with StrictLogging {
 
-  import CrawlerWorkerActor._
-  import WorkDelegatorActor._
+  import PageWorkerActor._
   private implicit val executionContext: ExecutionContext = context.system.dispatchers.lookup("thread-pool-dispatcher")
   private implicit val delay: FiniteDuration = 4 seconds
 
   private val logInstanceIdentifier = s"CrawlerWorker_$workerId:"
-  private var inIdleState: DateTime = DateTime.now()
+  private var inIdleState: Option[DateTime] = Some(DateTime.now())
   private val browser = new HeadlessBrowser()
 //  private val db = Database.forConfig("local")
   private val dbService = new DBService(db)
@@ -47,40 +51,61 @@ class CrawlerWorkerActor(
   override def receive: Receive = LoggingReceive {
 
     case WorkerStatusRequest => sender() ! (inIdleState match {
-      case null => WorkerStatusResponse(isIdle = false, null)
-      case dateTime: DateTime => WorkerStatusResponse(isIdle = true, getDuration(dateTime))
+      case Some(dateTime) => WorkerStatusResponse(isIdle = true, getDuration(dateTime))
+      case None => WorkerStatusResponse(isIdle = false, null)
     })
 
-    case ProcessNextPage(pageRow, site) =>
-      logger.info(s"$logInstanceIdentifier Got a new pageRow to process: $pageRow")
-      // TODO: wait until duration > idleState
-      //  remove the inIdleState
-      inIdleState = null
-      var page: PageRow = pageRow.copy() // TODO: add SHA hash as a field in `page` table
-      if (page.siteId.isDefined) {
-        if (pageRow.siteId.get != site.id) {
-          logger.info(s"$logInstanceIdentifier Monkey business: page is not associated to site.")
-          throw new Exception(s"$logInstanceIdentifier Monkey business: page is not associated to site.")
-        }
-      } else {
-        page = pageRow.copy(siteId = Some(site.id))
+    case StartWorker =>
+      while(pageQueue.hasMorePages) {
+        pageQueue.dequeue().map(queueEntry => {
+          inIdleState = None
+          // TODO: wait until duration > idleState
+          //  remove the inIdleState
+
+          val queuedPage = queueEntry.pageInQueue
+          val referencePage = queueEntry.referencePage
+          val site = inferSite(queuedPage)
+          logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
+          var page: PageRow = queuedPage.copy() // TODO: add SHA hash as a field in `page` table
+          val links = List.empty[QueuePageEntry]
+          val data = List.empty[QueueDataEntry]
+          pageQueue.enqueueAll(links)
+          dataQueue.enqueueAll(data)
+
+          inIdleState = Some(DateTime.now())
+          None
+        })
       }
-      val links: Seq[PageRow] = processPage(page, site, downloadData = false)
-      if (links.nonEmpty) {
-        links.foreach(queue.enqueue)
-      }
-      /*while(!queue.isEmpty) {
-        logger.info(s"$logInstanceIdentifier next item: ${queue.dequeue()}")
-        Thread.sleep(200)
-      }*/
-//      if (debug) links.foreach(link => logger.debug(s"$logInstanceIdentifier got link: $link"))
-      // after wrapping up with processing, update the idle state
-      inIdleState = DateTime.now()
       logger.info(s"$logInstanceIdentifier Queue is empty.")
+      // TODO: send self a waking signal after 30s
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
   }
 
-  def processPage(inputPage: PageRow, site:SiteRow, downloadData: Boolean): Seq[PageRow] = {
+  def inferSite(page: PageRow): Option[SiteRow] = {
+    dbService.getSiteByDomain(Canonical.extractDomain(page.url.get)) match {
+      case Some(site) => Some(site)
+      case None =>
+        val domain = Some(Canonical.extractDomain(page.url.get))
+        logger.info (s"$logInstanceIdentifier domain = $domain")
+        var site = SiteRow (- 1, domain)
+        val robotsContent = browser.getRobotsTxt(Canonical.getCanonical(site.domain.get))
+        robotsContent.map (content => {
+          site = site.copy(robotsContent = Some(content + "\n"))
+          val robotsTxt = new SiteRobotsTxt(site)
+          if (robotsTxt.getSitemaps.size > 1) {
+            logger.warn (s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
+          }
+          robotsTxt.getSitemaps.foreach (url => {
+            site = site.copy(sitemapContent = browser.getUrlContent (url) )
+            pageQueue.enqueueAll(SiteMaps.getSiteMapUrls(url, site).map(page => QueuePageEntry(page)))
+          })
+          content
+        })
+        dbService.insertOrUpdateSite(site)
+    }
+  }
+
+  /*def processPage(inputPage: PageRow, site:SiteRow, downloadData: Boolean): Seq[PageRow] = {
     val obtainedPage = browser.getPageSource(inputPage)
     logger.info(s"$logInstanceIdentifier Status code: ${obtainedPage.httpStatusCode}")
     if(obtainedPage.httpStatusCode.get >= 200 && obtainedPage.httpStatusCode.get < 300) {
@@ -105,5 +130,5 @@ class CrawlerWorkerActor(
       logger.info(s"$logInstanceIdentifier Done, continuing...")
       links
     } else List.empty
-  }
+  }*/
 }

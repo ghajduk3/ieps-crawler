@@ -9,8 +9,11 @@ import scala.concurrent.ExecutionContext
 object CrawlerDIO {
   implicit val ec: ExecutionContext = ExecutionContext.global
 
-  def findSiteById(id: Int): DBIO[Option[SiteRow]] = Query.siteById(id).result.headOption
+  def findSiteById(id: Int): DBIO[SiteRow] = Query.siteById(id).result.head
+  def findSiteByIdOption(id: Int): DBIO[Option[SiteRow]] = Query.siteById(id).result.headOption
   def findPageByIdOption(id: Int): DBIO[Option[PageRow]] = Page.filter(_.id === id).result.headOption
+  def findSiteByDomain(domain: String): DBIO[SiteRow] = Site.filter(_.domain === domain).result.head
+  def findPageByDomainOption(domain: String): DBIO[Option[SiteRow]] = Site.filter(_.domain === domain).result.headOption
   def findPageByUrl(page: PageRow): DBIO[PageRow] = Page.filter(_.url === page.url).result.head
   def findPageByUrlOption(page: PageRow): DBIO[Option[PageRow]] = Page.filter(_.url === page.url).result.headOption
   def findPageById(id: Int): DBIO[PageRow] = Page.filter(_.id === id).result.head
@@ -38,6 +41,18 @@ object CrawlerDIO {
 
   // insert statements
   def insertSite(site: SiteRow): DBIO[SiteRow] = (Query.writeSite += site)
+  def insertOrUpdateSite(site: SiteRow): DBIO[SiteRow] = {
+    val query = Site.filter(existing => existing.id === site.id)
+    val existsAction = query.exists.result
+    (for {
+      exists <- existsAction
+      result <- if (exists) {
+        query.update(site).flatMap { _ => findSiteById(site.id) }
+      } else {
+        insertSite(site).flatMap(pageRow => findSiteById(pageRow.id)) //transactionally is important
+      }
+    } yield result).transactionally
+  }
   def insertPage(page: PageRow): DBIO[PageRow] = (Query.writePage += page)
   def insertPage(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = (Query.writePage ++= pages)
   def insertPage(pages: List[PageRow]): DBIO[Seq[PageRow]] = insertPage(pages.toSeq)
@@ -47,12 +62,10 @@ object CrawlerDIO {
     val existsAction = query.exists.result
     (for {
       exists <- existsAction
-      result <- exists match {
-        case true =>
-          query.update(page).flatMap{ _ => findPageById(page.id)}
-        case false => {
-          insertPage(page).flatMap(pageRow => findPageById(pageRow.id)) //transactionally is important
-        }
+      result <- if (exists) {
+        query.update(page).flatMap { _ => findPageById(page.id) }
+      } else {
+        insertPage(page).flatMap(pageRow => findPageById(pageRow.id)) //transactionally is important
       }
     } yield result).transactionally
   }
@@ -60,6 +73,12 @@ object CrawlerDIO {
     Page.filter(p => p.url === page.url).result.headOption.flatMap {
       case Some(foundPage) => findPageByUrl(page)
       case None => insertPage(page)
+    }.transactionally
+
+  def insertIfNotExistsByDomain(site: SiteRow): DBIO[SiteRow] =
+    Site.filter(p => p.domain === site.domain).result.headOption.flatMap {
+      case Some(foundPage) => findSiteByDomain(site.domain.get)
+      case None => insertSite(site)
     }.transactionally
 
   def insertIfNotExistsByUrl(pages: List[PageRow]): DBIO[List[PageRow]] =

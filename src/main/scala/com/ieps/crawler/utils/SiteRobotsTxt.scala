@@ -15,6 +15,8 @@ class SiteRobotsTxt(
   private val robotRules: SimpleRobotRules = robotsRulesParser.parseContent(site.domain.get, site.robotsContent.get.getBytes, contentType, robotNames)
 
   def getRobotRules: List[SimpleRobotRules.RobotRule] = robotRules.getRobotRules.asScala.toList
+  def getDelay: Long = robotRules.getCrawlDelay
+  def getSitemaps: List[String] = robotRules.getSitemaps.asScala.toList
 
   def isAllowed(pageRow: PageRow): Boolean = {
     if (pageRow.url.isDefined) robotRules.isAllowed(pageRow.url.get)

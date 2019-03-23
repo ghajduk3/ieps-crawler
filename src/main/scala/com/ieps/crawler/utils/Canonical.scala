@@ -12,9 +12,16 @@ object Canonical extends StrictLogging {
   var index_pages = Array("index.html", "index.htm", "index.shtml", "index.php", "default.html", "default.htm", "home.html", "home.htm", "index.php5", "index.php4", "index.cgi", "index.php3", "placeholder.html", "default.asp")
   val extensions = Array(".html", ".htm", ".php", ".ppt", ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".php5", ".php4", ".cgi", ".php3", ".asp", ".jpg", ".png", ".jpeg", ".svg", ".tiff", ".gif")
 
-  def getCanonical(wildUrl: String): String = {
+  def getCanonical(noviUrl: String): String = {
+    var wildUrl = noviUrl
+
     val urlNormal: BasicURLNormalizer = new BasicURLNormalizer
-    // var decodedURl = URLEncoder.encode(wildUrl.toLowerCase,"UTF-8")
+
+    // before making a URL object protocol has to be checked
+    if (!wildUrl.startsWith("http://") && !wildUrl.startsWith("https://")) {
+      wildUrl = "http://" + wildUrl
+    }
+
     val url: URL = new URL(wildUrl)
     var url1 = url.toString
     //Mixed host name Capital letters
@@ -35,7 +42,6 @@ object Canonical extends StrictLogging {
     if (url.getPath.takeRight(1) != "/") {
       url1 = url1 + "/"
     }
-
     val c = urlNormal.filter(url1)
     val urli: URL = new URL(c)
     val uri: URI = new URI(urli.getProtocol, urli.getUserInfo, urli.getHost, urli.getPort, urli.getPath, urli.getQuery, urli.getRef)
@@ -46,5 +52,13 @@ object Canonical extends StrictLogging {
       }
     }
     urii
+  }
+
+  def extractDomain(urlStr: String): String = try {
+    val domain = new URI(getCanonical(urlStr)).getHost
+    if (domain.startsWith("www")) domain.substring(4)
+    else domain
+  } catch {
+    case _: Exception => "Url is not correct"
   }
 }

@@ -114,5 +114,5 @@ values ('HTML'),
        ('FRONTIER'),
        ('text/html');
 
-insert into crawldb.site
-values (1, 'site1', 'robots', 'sitemap');
+-- insert into crawldb.site
+-- values (1, 'site1', 'robots', 'sitemap');
