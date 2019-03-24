@@ -4,7 +4,7 @@ import java.util.concurrent.ThreadLocalRandom
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
-import com.ieps.crawler.db.DBService
+import com.ieps.crawler.db.{DBService, Tables}
 import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
 import com.ieps.crawler.queue.Queue.{QueueDataEntry, QueuePageEntry}
 import com.ieps.crawler.queue.{DataQueue, PageQueue}
@@ -13,7 +13,7 @@ import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 import slick.jdbc.PostgresProfile.api.Database
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
@@ -38,6 +38,7 @@ class PageWorkerActor(
   import PageWorkerActor._
   private implicit val executionContext: ExecutionContext = context.system.dispatchers.lookup("thread-pool-dispatcher")
   private implicit val delay: FiniteDuration = 4 seconds
+  private implicit val timeout: FiniteDuration = 10 seconds
 
   private val logInstanceIdentifier = s"CrawlerWorker_$workerId:"
   private var inIdleState: Option[DateTime] = Some(DateTime.now())
@@ -61,17 +62,37 @@ class PageWorkerActor(
           inIdleState = None
           // TODO: wait until duration > idleState
           //  remove the inIdleState
-
           val queuedPage = queueEntry.pageInQueue
           val referencePage = queueEntry.referencePage
-          val site = inferSite(queuedPage)
-          logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
-          var page: PageRow = queuedPage.copy() // TODO: add SHA hash as a field in `page` table
-          val links = List.empty[QueuePageEntry]
-          val data = List.empty[QueueDataEntry]
-          pageQueue.enqueueAll(links)
-          dataQueue.enqueueAll(data)
 
+          logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
+          try {
+            inferSite(queuedPage).foreach(site => {
+              Await.ready(browser.getPageSource(queuedPage), timeout).value.get match {
+                case Success(pageWithContent: PageRow) =>
+                  Utils.retryWithBackoff(logRetry = true) {
+                    val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id))) // TODO: add SHA hash as a field in `page` table
+                    referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
+
+                    val httpStatusCode = insertedPage.httpStatusCode.get
+
+                    if (200 <= httpStatusCode && httpStatusCode < 400) {
+                      val extractor = new ExtractFromHTML(insertedPage, site)
+
+                      // enqueue the extracted links
+                      extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
+                      // enqueue the page data
+                      extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
+                      // enqueue the images
+                      extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
+                    } else logger.warn(s"Got status code $httpStatusCode")
+                  }
+                case Failure(exception) =>
+              }
+            })
+          } catch {
+            case e: Exception => logger.error(s"$logInstanceIdentifier Failed processing ${queuedPage.url.get}")
+          }
           inIdleState = Some(DateTime.now())
           None
         })
@@ -89,19 +110,23 @@ class PageWorkerActor(
         logger.info (s"$logInstanceIdentifier domain = $domain")
         var site = SiteRow (- 1, domain)
         val robotsContent = browser.getRobotsTxt(Canonical.getCanonical(site.domain.get))
-        robotsContent.map (content => {
+        robotsContent.foreach(content => {
           site = site.copy(robotsContent = Some(content + "\n"))
           val robotsTxt = new SiteRobotsTxt(site)
           if (robotsTxt.getSitemaps.size > 1) {
             logger.warn (s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
           }
           robotsTxt.getSitemaps.foreach (url => {
-            site = site.copy(sitemapContent = browser.getUrlContent (url) )
-            pageQueue.enqueueAll(SiteMaps.getSiteMapUrls(url, site).map(page => QueuePageEntry(page)))
+            Try(browser.getUrlContent(url)) match {
+              case Success(Some(content: String)) =>
+                site = site.copy(sitemapContent = Some(content))
+                pageQueue.enqueueAll(SiteMaps.getSiteMapUrls(url, site).map(page => QueuePageEntry(page)))
+            }
           })
-          content
         })
-        dbService.insertOrUpdateSite(site)
+        Utils.retryWithBackoff {
+          Some(dbService.insertIfNotExistsByDomain(site))
+        }
     }
   }
 

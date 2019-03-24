@@ -29,13 +29,13 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024) ex
   }
 
   override def enqueue(item: QueuePageEntry): Unit = {
-    logger.info(s"Enqueueing ${item}")
     queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
     uncommittedChanges += 1
     commitIfNecessary()
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
+    logger.info(s"Enqueue size: ${items.size}")
     items.foreach(enqueue)
   }
 

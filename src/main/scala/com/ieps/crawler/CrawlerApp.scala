@@ -4,7 +4,6 @@ import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import com.ieps.crawler.actors.PageWorkerActor
 import com.ieps.crawler.actors.PageWorkerActor.StartWorker
-import com.ieps.crawler.actors.WorkDelegatorActor.ProcessNextPage
 import com.ieps.crawler.queue.Queue.QueuePageEntry
 import com.ieps.crawler.queue.{DataQueue, PageQueue}
 import com.typesafe.scalalogging.StrictLogging
@@ -28,8 +27,8 @@ object CrawlerApp extends App with StrictLogging {
   val siteRow = SiteRow(1, Some("https://e-uprava.gov.si/"))
   pageQueue.enqueueAll(List(
 //    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))),
-//    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))),
-//    QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/"))),
     QueuePageEntry(PageRow(id = -1, url=Some("http://www.e-prostor.gov.si/")))
   ))
 

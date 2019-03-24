@@ -33,13 +33,8 @@ class DBService(db: Database) {
   def insertOrUpdateSiteFuture(site: SiteRow): Future[SiteRow] =
     db.run(CrawlerDIO.insertOrUpdateSite(site))
 
-  def insertOrUpdateSite(site: SiteRow): Option[SiteRow] =
-    Await.ready[SiteRow](insertOrUpdateSiteFuture(site), timeout).value.get match {
-      case Success(result) => Some(result)
-      case Failure(exception) =>
-        exception.printStackTrace()
-        None
-    }
+  def insertOrUpdateSite(site: SiteRow): SiteRow =
+    Await.result(insertOrUpdateSiteFuture(site), timeout)
 
   def insertIfNotExistsByDomainFuture(siteRow: SiteRow): Future[SiteRow] =
     db.run(CrawlerDIO.insertIfNotExistsByDomain(siteRow))
@@ -71,6 +66,9 @@ class DBService(db: Database) {
 
   def insertOrUpdatePage(pages: List[PageRow]): Seq[PageRow] =
     Await.result(insertOrUpdatePageFuture(pages), timeout)
+
+  def insertOrUpdatePage(page: PageRow): PageRow =
+    insertOrUpdatePage(List(page)).head
 
   def insertIfNotExistsByUrlFuture(page: PageRow): Future[PageRow] =
     db.run(CrawlerDIO.insertIfNotExistsByUrl(page))
