@@ -9,6 +9,7 @@ import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
 import com.ieps.crawler.queue.Queue.{QueueDataEntry, QueuePageEntry}
 import com.ieps.crawler.queue.{DataQueue, PageQueue}
 import com.ieps.crawler.utils._
+import com.panforge.robotstxt.RobotsTxt
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.DateTime
 import slick.jdbc.PostgresProfile.api.Database
@@ -24,6 +25,8 @@ object PageWorkerActor {
   case object StartWorker
   case object WorkerStatusRequest
   case class WorkerStatusResponse(isIdle: Boolean, idleTime: FiniteDuration)
+
+  val defaultDelayTime: Long = 4 * 1000L // 4s
 }
 
 class PageWorkerActor(
@@ -68,30 +71,42 @@ class PageWorkerActor(
           logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
           try {
             inferSite(queuedPage).foreach(site => {
-              Await.ready(browser.getPageSource(queuedPage), timeout).value.get match {
-                case Success(pageWithContent: PageRow) =>
-                  Utils.retryWithBackoff(logRetry = true) {
-                    val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id))) // TODO: add SHA hash as a field in `page` table
-                    referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
+              val robots = new SiteRobotsTxt(site)
+              robots.isAllowed(queuedPage) match {
+                case true => {
+                  Await.ready(browser.getPageSource(queuedPage), timeout).value.get match {
+                    case Success(pageWithContent: PageRow) =>
+                      Utils.retryWithBackoff(logRetry = true) {
+                        val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id))) // TODO: add SHA hash as a field in `page` table
+                        referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
+                        val httpStatusCode = insertedPage.httpStatusCode.get
 
-                    val httpStatusCode = insertedPage.httpStatusCode.get
+                        if (200 <= httpStatusCode && httpStatusCode < 400) {
+                          val extractor = new ExtractFromHTML(insertedPage, site)
 
-                    if (200 <= httpStatusCode && httpStatusCode < 400) {
-                      val extractor = new ExtractFromHTML(insertedPage, site)
-
-                      // enqueue the extracted links
-                      extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
-                      // enqueue the page data
-                      extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
-                      // enqueue the images
-                      extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
-                    } else logger.warn(s"Got status code $httpStatusCode")
+                          // enqueue the extracted links
+                          extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
+                          // enqueue the page data
+                          extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
+                          // enqueue the images
+                          extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
+                        } else logger.warn(s"Got status code $httpStatusCode")
+                      }
+                    case Failure(exception) =>
+                      logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
                   }
-                case Failure(exception) =>
+                  var delay = robots.getDelay
+                  if (delay == Long.MinValue) {
+                    delay = defaultDelayTime
+                  }
+                  logger.info(s"$logInstanceIdentifier Waiting for ${delay / 1000L}")
+                  Thread.sleep(delay)
+                }
+                case false => logger.warn(s"$logInstanceIdentifier Site not allowed: ${queuedPage.url.get}")
               }
             })
           } catch {
-            case e: Exception => logger.error(s"$logInstanceIdentifier Failed processing ${queuedPage.url.get}")
+            case e: Exception => logger.error(s"$logInstanceIdentifier Failed processing ${queuedPage.url.get}: ${e.getMessage}")
           }
           inIdleState = Some(DateTime.now())
           None

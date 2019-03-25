@@ -66,7 +66,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   }
 
   def getPageLinks: Option[List[PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct)
+    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")))
   }
 
   def getPageData: Option[List[Tables.PageRow]] = {
@@ -76,8 +76,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   private def extractLink(url: String): String = {
     try {
       Canonical.getCanonical(url)
-    }
-    catch {
+    } catch {
       case _: Exception =>
         Canonical.getCanonical(siteSource.domain.get + url)
     }

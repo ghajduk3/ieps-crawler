@@ -12,7 +12,8 @@ object SiteMaps extends StrictLogging {
     var pages = List.empty[PageRow]
     val siteMapURLs = siteMap.getSiteMapUrls // TODO: needs to be fixed.
     siteMapURLs.forEach(siteMapUrl => {
-      pages = pages :+ PageRow(-1, Some(site.id), Some("FRONTIER"), Some(Canonical.getCanonical(site.domain.get + siteMapUrl.getUrl.toString.trim)))
+      logger.info(s"sitemap: ${siteMap.getBaseUrl + siteMapUrl}")
+      pages = pages :+ PageRow(-1, Some(site.id), Some("FRONTIER"), Some(Canonical.getCanonical(siteMap.getBaseUrl + siteMapUrl.getUrl.toString.trim)))
     })
     pages
   }

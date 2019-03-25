@@ -41,7 +41,10 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
       val htmlContent = webResponse.getContentAsString
       val htmlContentType = webResponse.getContentType
       val loadTime = webResponse.getLoadTime
-      Future.successful(pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some(htmlContentType), loadTime = Some(loadTime)))
+      if (!htmlContentType.equals("text/html")) {
+          throw new Exception("Invalid content type")
+      }
+      Future.successful(pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some("HTML"), loadTime = Some(loadTime)))
     } catch {
       case e: FailingHttpStatusCodeException =>
         Future.failed(FailedAttempt(e.getMessage, e.getCause, pageRow.copy(httpStatusCode = Some(e.getStatusCode))))
