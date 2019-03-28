@@ -2,12 +2,14 @@ package com.ieps.crawler.utils
 
 import java.io.InputStream
 import java.net.{MalformedURLException, UnknownHostException}
+import java.nio.charset.StandardCharsets
 import java.util.logging.Level
 
 import com.gargoylesoftware.htmlunit._
 import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow}
 import com.ieps.crawler.utils.HeadlessBrowser.FailedAttempt
 import com.typesafe.scalalogging.StrictLogging
+import org.joda.time.{DateTime, DateTimeZone}
 
 import scala.concurrent.Future
 
@@ -26,6 +28,7 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
   webClient.getOptions.setCssEnabled(false)
   webClient.getOptions.setThrowExceptionOnScriptError(false)
   webClient.getOptions.setTimeout(5000) // 5 s timeout
+  webClient.getOptions.setUseInsecureSSL(true)
 
   /**
     * Gets a web page with a given `url`
@@ -37,21 +40,59 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     try {
       val response: Page = webClient.getPage(pageRow.url.get)
       val webResponse: WebResponse = response.getWebResponse
-      val statusCode = webResponse.getStatusCode
-      val htmlContent = webResponse.getContentAsString
-      val htmlContentType = webResponse.getContentType
-      val loadTime = webResponse.getLoadTime
+      val statusCode: Int = webResponse.getStatusCode
+      val htmlContent: String = webResponse.getContentAsString
+      val hashCode: Option[String] = HashGenerator.generateSHA256(htmlContent)
+      val htmlContentType: String = webResponse.getContentType
+      val loadTime: Long = webResponse.getLoadTime
       if (!htmlContentType.equals("text/html")) {
           throw new Exception("Invalid content type")
       }
-      Future.successful(pageRow.copy(httpStatusCode = Some(statusCode), htmlContent = Some(htmlContent), pageTypeCode = Some("HTML"), loadTime = Some(loadTime)))
+      Future.successful(pageRow.copy(
+        httpStatusCode = Some(statusCode),
+        htmlContent = Some(htmlContent),
+        hash = hashCode,
+        pageTypeCode = Some("HTML"),
+        loadTime = Some(loadTime),
+        accessedTime = Some(DateTime.now(DateTimeZone.UTC))
+      ))
     } catch {
       case e: FailingHttpStatusCodeException =>
-        Future.failed(FailedAttempt(e.getMessage, e.getCause, pageRow.copy(httpStatusCode = Some(e.getStatusCode))))
+        Future.failed(
+          FailedAttempt(
+            e.getMessage,
+            e.getCause,
+            pageRow.copy(
+              pageTypeCode = Some("INVALID"),
+              httpStatusCode = Some(e.getStatusCode),
+              accessedTime = Some(DateTime.now(DateTimeZone.UTC))
+            )
+          )
+        )
       case e: UnknownHostException =>
-        Future.failed(FailedAttempt(e.getMessage, e.getCause, pageRow.copy(httpStatusCode = Some(404))))
+        Future.failed(
+          FailedAttempt(
+            e.getMessage,
+            e.getCause,
+            pageRow.copy(
+              pageTypeCode = Some("INVALID"),
+              httpStatusCode = Some(404),
+              accessedTime = Some(DateTime.now(DateTimeZone.UTC))
+            )
+          )
+        )
       case e @(_: MalformedURLException| _: Exception) =>
-        Future.failed(FailedAttempt(e.getMessage, e.getCause, pageRow.copy(httpStatusCode = Some(400))))
+        Future.failed(
+          FailedAttempt(
+            e.getMessage,
+            e.getCause,
+            pageRow.copy(
+              pageTypeCode = Some("INVALID"),
+              httpStatusCode = Some(400),
+              accessedTime = Some(DateTime.now(DateTimeZone.UTC))
+            )
+          )
+        )
     }
   }
 
@@ -68,10 +109,6 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     }
   }
 
-  def getRobotsTxt(domain: String): Option[String] = {
-    getUrlContent(domain.concat("robots.txt"))
-  }
-
   private def toByteArray(inputStream: InputStream): Array[Byte] = {
     Stream.continually(inputStream.read).takeWhile(_ != -1).map(_.toByte).toArray
   }
@@ -82,10 +119,22 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
       val webResponse: WebResponse = response.getWebResponse
       val contentType = Some(webResponse.getContentType)
       val contentData = Some(toByteArray(webResponse.getContentAsStream))
-      Some((contentType, contentData))
+      val httpCode = webResponse.getStatusCode
+      logger.info(s"httpcode for $url: $httpCode")
+      if (200 <= httpCode  && httpCode < 400) {
+        Some((contentType, contentData))
+      } else None
     } catch {
       case _: Exception =>
+        logger.info(s"Failed obtaining data for $url")
         None
+    }
+  }
+
+  def getRobotsTxt(domain: String): Option[String] = {
+    getData(domain.concat("robots.txt")) match {
+      case Some((_, data)) => data.map(new String(_, StandardCharsets.UTF_8))
+      case None => None
     }
   }
 

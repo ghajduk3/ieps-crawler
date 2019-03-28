@@ -9,7 +9,7 @@ import com.ieps.crawler.queue.Queue._
 import com.leansoft.bigqueue.BigQueueImpl
 import com.typesafe.scalalogging.LazyLogging
 
-class DataQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = true) extends Queue[QueueDataEntry] with LazyLogging {
+class DataQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = false) extends Queue[QueueDataEntry] with LazyLogging {
   import Queue._
 
   implicit def QueueDataRowCodecJson: CodecJson[QueueDataEntry] = casecodec3(QueueDataEntry.apply, QueueDataEntry.unapply)("isData","pageId", "url")

@@ -95,17 +95,29 @@ class DBService(db: Database) {
   def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow]) =
     Await.result(insertPageWithContentFuture(page, images, pageDatum, pageLinks), timeout)
 
-  def pageExistsFuture(page: PageRow): Future[Boolean] =
-    db.run(CrawlerDIO.pageExists(page))
+  def pageExistsByUrlFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExistsByUrl(page))
 
-  def pageExists(page: PageRow): Boolean =
-    Await.result(pageExistsFuture(page), timeout)
+  def pageExistsByUrl(page: PageRow): Boolean =
+    Await.result(pageExistsByUrlFuture(page), timeout)
 
-  def pageExistsFuture(page: List[PageRow]): Future[Seq[PageRow]] =
-    db.run(CrawlerDIO.pageExists(page))
+  def pageExistsByUrlFuture(page: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.pageExistsByUrl(page))
 
-  def pageExists(page: List[PageRow]): Seq[PageRow] =
-    Await.result(pageExistsFuture(page), timeout)
+  def pageExistsByUrl(page: List[PageRow]): Seq[PageRow] =
+    Await.result(pageExistsByUrlFuture(page), timeout)
+
+  def pageExistsByHashFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExistsByHash(page))
+
+  def pageExistsByHash(page: PageRow): Boolean =
+    Await.result(pageExistsByHashFuture(page), timeout)
+
+  def pageExistsByHashFuture(page: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.pageExistsByHash(page))
+
+  def pageExistsByHash(page: List[PageRow]): Seq[PageRow] =
+    Await.result(pageExistsByUrlFuture(page), timeout)
 
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))

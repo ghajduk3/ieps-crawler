@@ -10,10 +10,10 @@ import com.ieps.crawler.queue.Queue.{Queue, QueuePageEntry}
 import com.leansoft.bigqueue.BigQueueImpl
 import com.typesafe.scalalogging.LazyLogging
 
-class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = true) extends Queue[QueuePageEntry] with LazyLogging {
+class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = false) extends Queue[QueuePageEntry] with LazyLogging {
   import Queue.DateTimeISO8601CodecJsons._
 
-  implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec9(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
+  implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec10(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "hash", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
   implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec2(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "siteId")
 
   private val queue: BigQueueImpl = new BigQueueImpl(folder, "pageQueue", bigQueuePageSize) // default page size is 128MB
@@ -37,7 +37,7 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
-    logger.info(s"Enqueue size: ${items.size}")
+//    logger.info(s"Enqueue size: ${items.size}")
     items.foreach(enqueue)
   }
 

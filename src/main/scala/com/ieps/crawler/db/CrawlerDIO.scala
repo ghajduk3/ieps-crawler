@@ -69,15 +69,22 @@ object CrawlerDIO {
       }
     } yield result).transactionally
   }
+
   def insertIfNotExistsByUrl(page: PageRow): DBIO[PageRow] =
     Page.filter(p => p.url === page.url).result.headOption.flatMap {
-      case Some(foundPage) => findPageByUrl(page)
+      case Some(foundPage) => DBIO.successful(foundPage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case None => insertIfNotExistsByHash(page)
+    }.transactionally
+
+  def insertIfNotExistsByHash(page: PageRow): DBIO[PageRow] =
+    Page.filter(p => p.hash === page.hash).result.headOption.flatMap {
+      case Some(foundPage) => DBIO.successful(foundPage) // is duplicate
       case None => insertPage(page)
     }.transactionally
 
   def insertIfNotExistsByDomain(site: SiteRow): DBIO[SiteRow] =
     Site.filter(p => p.domain === site.domain).result.headOption.flatMap {
-      case Some(foundPage) => findSiteByDomain(site.domain.get)
+      case Some(foundPage) => DBIO.successful(foundPage)//findSiteByDomain(site.domain.get)
       case None => insertSite(site)
     }.transactionally
 
@@ -89,12 +96,23 @@ object CrawlerDIO {
     DBIO.sequence(pages.map(page => insertOrUpdatePage(page))).transactionally
   def insertOrUpdatePage(pages: Seq[PageRow]): DBIO[List[PageRow]] =
     insertOrUpdatePage(pages.toList)
-  def pageExists(pageRow: PageRow): DBIO[Boolean] =
-    Page.filter(page => page.url.isDefined && page.url === pageRow.url).exists.result
-  def pageExists(pageRow: List[PageRow]): DBIO[Seq[PageRow]] = {
+  def pageExistsByUrl(pageRow: PageRow): DBIO[Boolean] =
+    Page.filter(page => (page.url.isDefined && page.url === pageRow.url) || (page.hash.isDefined && page.hash === pageRow.hash)).exists.result
+
+  def pageExistsByUrl(pageRow: List[PageRow]): DBIO[Seq[PageRow]] = {
     val urls = pageRow.filter(_.url.isEmpty).map(_.url.get)
     Page.filter(row => row.url.inSet(urls)).result
   }
+
+  def pageExistsByHash(pageRow: PageRow): DBIO[Boolean] =
+    Page.filter(page => page.hash.isDefined && page.hash === pageRow.hash).exists.result
+
+  def pageExistsByHash(pageRow: List[PageRow]): DBIO[Seq[PageRow]] = {
+    val hashes = pageRow.filter(_.hash.isEmpty).map(_.hash.get)
+    Page.filter(row => row.hash.inSet(hashes)).result
+  }
+
+
 
   def insertLink(link: LinkRow): DBIO[LinkRow] = Query.writeLink += link
   def insertLinkIfNotExists(link: LinkRow): DBIO[LinkRow] =

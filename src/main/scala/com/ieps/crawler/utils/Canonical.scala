@@ -10,7 +10,7 @@ import scala.util.matching.Regex
 object Canonical extends StrictLogging {
   var pattern_percent: Regex = "(%[0-9a-f]{2})".r
   var index_pages = Array("index.html", "index.htm", "index.shtml", "index.php", "default.html", "default.htm", "home.html", "home.htm", "index.php5", "index.php4", "index.cgi", "index.php3", "placeholder.html", "default.asp")
-  val extensions = Array(".html", ".htm", ".php", ".ppt", ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".php5", ".php4", ".cgi", ".php3", ".asp", ".jpg", ".png", ".jpeg", ".svg", ".tiff", ".gif", ".jsp", ".jspx", ".asp", ".aspx")
+  val extensions = Array(".html", ".htm", ".php", ".ppt", ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".php5", ".php4", ".cgi", ".php3", ".asp", ".jpg", ".png", ".jpeg", ".svg", ".tiff", ".gif", ".jsp", ".jspx", ".asp", ".aspx", ".zip", ".gz", ".tar.gz", ".tar")
 
   def getCanonical(noviUrl: String): String = {
     var wildUrl = noviUrl

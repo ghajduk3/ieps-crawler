@@ -1,6 +1,9 @@
 package com.ieps.crawler.utils
 
+import java.util.concurrent.RejectedExecutionException
+
 import com.typesafe.scalalogging.StrictLogging
+import org.postgresql.util.PSQLException
 
 import scala.reflect.{ClassTag, classTag}
 import scala.util.Random

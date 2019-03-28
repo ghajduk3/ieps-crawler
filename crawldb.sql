@@ -30,6 +30,7 @@ create table crawldb.page
   site_id          integer,
   page_type_code   varchar(20),
   url              varchar(3000),
+  hash             varchar(256),
   html_content     text,
   http_status_code integer,
   load_time        bigint,
@@ -113,7 +114,8 @@ values ('HTML'),
        ('BINARY'),
        ('DUPLICATE'),
        ('FRONTIER'),
-       ('text/html');
+       ('INVALID'),
+       ('DISALLOWED');
 
 -- insert into crawldb.site
 -- values (1, 'site1', 'robots', 'sitemap');

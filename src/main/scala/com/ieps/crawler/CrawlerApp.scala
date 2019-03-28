@@ -1,7 +1,7 @@
 package com.ieps.crawler
 
 import akka.actor.CoordinatedShutdown.JvmExitReason
-import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
+import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown, Kill}
 import com.ieps.crawler.actors.PageWorkerActor
 import com.ieps.crawler.actors.PageWorkerActor.StartWorker
 import com.ieps.crawler.queue.Queue.QueuePageEntry
@@ -19,22 +19,30 @@ object CrawlerApp extends App with StrictLogging {
   implicit val ec: ExecutionContextExecutor = ExecutionContext.global
   val actorSystem: ActorSystem = ActorSystem("ieps-crawler")
   val dbConnection = Database.forConfig("local")
+
+
   val pageQueue = new PageQueue("./queue")
   val dataQueue = new DataQueue("./queue")
-  val crawlerWorker: ActorRef = actorSystem.actorOf(PageWorkerActor.props("1", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
-  val crawlerWorker2: ActorRef = actorSystem.actorOf(PageWorkerActor.props("2", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
-
-  val siteRow = SiteRow(1, Some("https://e-uprava.gov.si/"))
-  pageQueue.enqueueAll(List(
-//    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))),
-    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/it.html"))),
-    QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/"))),
-    QueuePageEntry(PageRow(id = -1, url=Some("http://www.e-prostor.gov.si/")))
-  ))
-
-  crawlerWorker ! StartWorker
+  var workers: List[ActorRef] = (1 to 8).toList.map(id =>
+    actorSystem.actorOf(PageWorkerActor.props(s"$id", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
+  )
+//  val crawlerWorker: ActorRef = actorSystem.actorOf(PageWorkerActor.props("1", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
+//  val crawlerWorker2: ActorRef = actorSystem.actorOf(PageWorkerActor.props("2", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))
+//  crawlerWorker ! StartWorker
 //  Thread.sleep(2000)
-  crawlerWorker2 ! StartWorker
+//  crawlerWorker2 ! StartWorker
+
+  pageQueue.enqueueAll(List(
+    QueuePageEntry(PageRow(id = -1, url=Some("http://www.e-prostor.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("http://www.e-prostor.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("http://evem.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("https://e-uprava.gov.si/"))),
+    QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/")))
+  ))
+  workers.foreach(worker => {
+    Thread.sleep(5000) // add some time between spawning new actors
+    worker ! StartWorker
+  })
   /*
   try {
     val dbService = new DBService("local")
@@ -65,6 +73,7 @@ object CrawlerApp extends App with StrictLogging {
     def handle(sig: Signal) {
       logger.info(s"Shutting down.")
       // TODO: graceful actor shut-down
+      workers.foreach(worker => worker ! Kill)
       dbConnection.close()
       Await.result(CoordinatedShutdown(actorSystem).run(JvmExitReason), 30 seconds)
     }
