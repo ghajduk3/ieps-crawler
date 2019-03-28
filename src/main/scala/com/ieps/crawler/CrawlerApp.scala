@@ -40,8 +40,8 @@ object CrawlerApp extends App with StrictLogging {
     QueuePageEntry(PageRow(id = -1, url=Some("https://podatki.gov.si/")))
   ))
   workers.foreach(worker => {
-    Thread.sleep(5000) // add some time between spawning new actors
     worker ! StartWorker
+    Thread.sleep(5000) // add some time between spawning new actors
   })
   /*
   try {

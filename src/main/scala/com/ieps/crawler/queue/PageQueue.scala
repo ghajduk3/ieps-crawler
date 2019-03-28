@@ -10,6 +10,8 @@ import com.ieps.crawler.queue.Queue.{Queue, QueuePageEntry}
 import com.leansoft.bigqueue.BigQueueImpl
 import com.typesafe.scalalogging.LazyLogging
 
+import scala.collection.mutable
+
 class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = false) extends Queue[QueuePageEntry] with LazyLogging {
   import Queue.DateTimeISO8601CodecJsons._
 
@@ -17,7 +19,13 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
   implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec2(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "siteId")
 
   private val queue: BigQueueImpl = new BigQueueImpl(folder, "pageQueue", bigQueuePageSize) // default page size is 128MB
-  if (clearState) queue.removeAll()
+  private val uniqueElements: mutable.TreeSet[String] = mutable.TreeSet.empty // keeps only unique elements in the queue
+
+  if (clearState) {
+    queue.removeAll()
+  } else { // initialize the in-memory set of unique elements
+
+  }
 
   private var uncommittedChanges = 0
 
@@ -30,6 +38,16 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
     queue.close()
   }
 
+  def addIfNotInQueue(pageRow: PageRow): Boolean = {
+    if (pageRow.url.isDefined) {
+      !uniqueElements.add(pageRow.url.get)
+    } else {
+      // we do not need undefined
+      logger.warn(s"Url undefined? $pageRow")
+      false
+    }
+  }
+
   override def enqueue(item: QueuePageEntry): Unit = {
     queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
     uncommittedChanges += 1
@@ -37,8 +55,8 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
-//    logger.info(s"Enqueue size: ${items.size}")
-    items.foreach(enqueue)
+    items.filter(element => addIfNotInQueue(element.pageInQueue)).foreach(enqueue)
+    logger.info(s"Queue size: ${size()}")
   }
 
   override def dequeue(): Option[QueuePageEntry] = try {

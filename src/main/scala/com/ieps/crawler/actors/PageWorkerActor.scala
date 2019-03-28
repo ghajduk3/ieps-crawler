@@ -61,7 +61,6 @@ class PageWorkerActor(
           val processed = pageQueue.dequeue().map(queueEntry => {
             val queuedPage = queueEntry.pageInQueue
             val referencePage = queueEntry.referencePage
-            logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
             try {
               inferSite(queuedPage).map(site => {
                 val robots = new SiteRobotsTxt(site) // TODO: fix if not present with default values
@@ -70,6 +69,7 @@ class PageWorkerActor(
                     if (!duplicate.isDuplicatePage(queuedPage)) {
                       Await.ready(browser.getPageSource(queuedPage), timeout).value.get match {
                         case Success(pageWithContent: PageRow) =>
+                          logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
                           Utils.retryWithBackoff(logRetry = true) {
                             val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id)))
                             referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
@@ -88,7 +88,7 @@ class PageWorkerActor(
                         case Failure(exception) => exception match {
                           case FailedAttempt(message, cause, failedPage: PageRow) =>
                             Utils.retryWithBackoff(logRetry = true) {
-                              dbService.insertIfNotExistsByUrl(failedPage.copy(siteId = Some(site.id))) // TODO: add SHA hash as a field in `page` table
+                              dbService.insertIfNotExistsByUrl(failedPage.copy(siteId = Some(site.id)))
                             }
                         }
                           logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
@@ -97,12 +97,12 @@ class PageWorkerActor(
                       logger.info(s"$logInstanceIdentifier Waiting for ${delay / 1000L}s")
                       context.system.scheduler.scheduleOnce(FiniteDuration(delay, MILLISECONDS), self, ProcessNextPage)
                     } else {
-                      logger.info(s"$logInstanceIdentifier Duplicate page: ${queuedPage.url.get}")
+                      logger.warn(s"$logInstanceIdentifier Duplicate page: ${queuedPage.url.get}")
                       self ! ProcessNextPage
                     }
                   }
                   case false =>
-                    dbService.insertIfNotExistsByUrl(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED"))) // TODO: add SHA hash as a field in `page` table
+                    dbService.insertIfNotExistsByUrl(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED")))
                     logger.warn(s"$logInstanceIdentifier Site not allowed: ${queuedPage.url.get}")
                     self ! ProcessNextPage
                 }
