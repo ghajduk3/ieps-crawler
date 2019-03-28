@@ -4,15 +4,22 @@ import java.net.URL
 
 import com.typesafe.scalalogging.StrictLogging
 import crawlercommons.sitemaps.{SiteMap, SiteMapIndex, SiteMapParser}
+import org.joda.time.{DateTime, DateTimeZone}
 
-object CrawlerSiteMap extends StrictLogging {
+object SiteMaps extends StrictLogging {
   import com.ieps.crawler.db.Tables._
 
   private def getSiteMapUrls(siteMap: SiteMap, site: SiteRow): List[PageRow] = {
     var pages = List.empty[PageRow]
-    val siteMapURLs = siteMap.getSiteMapUrls
+    val siteMapURLs = siteMap.getSiteMapUrls // TODO: needs to be fixed.
     siteMapURLs.forEach(siteMapUrl => {
-      pages = pages :+ PageRow(-1, Some(site.id), Some("FRONTIER"), Some(siteMapUrl.getUrl.toString))
+      pages = pages :+ PageRow(
+        id= -1,
+        siteId = Some(site.id),
+        pageTypeCode = Some("FRONTIER"),
+        url = Some(siteMapUrl.getUrl.toString.trim),
+        storedTime = Some(DateTime.now(DateTimeZone.UTC))
+      )
     })
     pages
   }
@@ -31,9 +38,10 @@ object CrawlerSiteMap extends StrictLogging {
     pages
   }
 
-  def getSiteMapUrls(urlSiteMap: String, site: SiteRow): List[PageRow] ={
+  def getSiteMapUrls(siteMapUrl: String, site: SiteRow): List[PageRow] ={
     val parser = new SiteMapParser()
-    parser.parseSiteMap(new URL(urlSiteMap)) match {
+//    logger.info(s"sitemap url = $siteMapUrl")
+    parser.parseSiteMap(new URL(siteMapUrl)) match {
       case siteMap: SiteMap =>
         getSiteMapUrls(siteMap, site)
 

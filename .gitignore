@@ -9,3 +9,5 @@ config/log4j.properties
 config/spark-defaults.conf
 .idea/
 .settings/
+.DS_STORE*
+queue/*

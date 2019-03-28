@@ -4,25 +4,43 @@ import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
+import scala.util.{Failure, Success}
 
-class DBService(dbConfig: String) {
+class DBService(db: Database) {
   import Tables._
 
-  val db = Database.forConfig(dbConfig)
   implicit val timeout: FiniteDuration = new FiniteDuration(1, MINUTES)
 
   // Site
   def getSiteByIdFuture(id: Int): Future[Option[SiteRow]] =
-    db.run(CrawlerDIO.findSiteById(id))
+    db.run(CrawlerDIO.findSiteByIdOption(id))
 
   def getSiteById(id: Int): Option[SiteRow] =
     Await.result(getSiteByIdFuture(id), timeout)
+
+  def getSiteByDomainFuture(domain: String): Future[Option[SiteRow]] =
+    db.run(CrawlerDIO.findPageByDomainOption(domain))
+
+  def getSiteByDomain(domain: String): Option[SiteRow] =
+    Await.result(getSiteByDomainFuture(domain), timeout)
 
   def insertSiteFuture(site: SiteRow): Future[SiteRow] =
     db.run(CrawlerDIO.insertSite(site))
 
   def insertSite(site: SiteRow): SiteRow =
     Await.result(insertSiteFuture(site), timeout)
+
+  def insertOrUpdateSiteFuture(site: SiteRow): Future[SiteRow] =
+    db.run(CrawlerDIO.insertOrUpdateSite(site))
+
+  def insertOrUpdateSite(site: SiteRow): SiteRow =
+    Await.result(insertOrUpdateSiteFuture(site), timeout)
+
+  def insertIfNotExistsByDomainFuture(siteRow: SiteRow): Future[SiteRow] =
+    db.run(CrawlerDIO.insertIfNotExistsByDomain(siteRow))
+
+  def insertIfNotExistsByDomain(siteRow: SiteRow): SiteRow =
+    Await.result(insertIfNotExistsByDomainFuture(siteRow), timeout)
 
   // Page
   def getPageByIdFuture(id: Int): Future[PageRow] =
@@ -37,6 +55,27 @@ class DBService(dbConfig: String) {
   def insertPage(page: PageRow): PageRow =
     Await.result(insertPageFuture(page), timeout)
 
+  def insertPageFuture(pages: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.insertPage(pages))
+
+  def insertPage(pages: List[PageRow]): Seq[PageRow] =
+    Await.result(insertPageFuture(pages), timeout)
+
+  def insertOrUpdatePageFuture(pages: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.insertOrUpdatePage(pages))
+
+  def insertOrUpdatePage(pages: List[PageRow]): Seq[PageRow] =
+    Await.result(insertOrUpdatePageFuture(pages), timeout)
+
+  def insertOrUpdatePage(page: PageRow): PageRow =
+    insertOrUpdatePage(List(page)).head
+
+  def insertIfNotExistsByUrlFuture(page: PageRow): Future[PageRow] =
+    db.run(CrawlerDIO.insertIfNotExistsByUrl(page))
+
+  def insertIfNotExistsByUrl(page: PageRow): PageRow =
+    Await.result(insertIfNotExistsByUrlFuture(page), timeout)
+
   // bulk insert
   def insertSiteWithPageFuture(site: SiteRow, page: PageRow): Future[(SiteRow, PageRow)] =
     db.run(CrawlerDIO.insertSiteWithPage(site, page))
@@ -50,17 +89,50 @@ class DBService(dbConfig: String) {
   def insertSiteWithPages(site: SiteRow, page: Seq[PageRow]): (SiteRow, Seq[PageRow]) =
     Await.result(insertSiteWithPagesFuture(site, page), timeout)
 
-  def insertPageWithContentFuture(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow]): Future[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
-    db.run(CrawlerDIO.insertPageWithContent(page, images, pageDatum))
+  def insertPageWithContentFuture(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): Future[(PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow])] =
+    db.run(CrawlerDIO.insertPageWithContent(page, images, pageDatum, pageLinks))
 
-  def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow]) =
-    Await.result(insertPageWithContentFuture(page, images, pageDatum), timeout)
+  def insertPageWithContent(page: PageRow, images: Seq[ImageRow], pageDatum: Seq[PageDataRow], pageLinks: Seq[PageRow]): (PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow]) =
+    Await.result(insertPageWithContentFuture(page, images, pageDatum, pageLinks), timeout)
+
+  def pageExistsByUrlFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExistsByUrl(page))
+
+  def pageExistsByUrl(page: PageRow): Boolean =
+    Await.result(pageExistsByUrlFuture(page), timeout)
+
+  def pageExistsByUrlFuture(page: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.pageExistsByUrl(page))
+
+  def pageExistsByUrl(page: List[PageRow]): Seq[PageRow] =
+    Await.result(pageExistsByUrlFuture(page), timeout)
+
+  def pageExistsByHashFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExistsByHash(page))
+
+  def pageExistsByHash(page: PageRow): Boolean =
+    Await.result(pageExistsByHashFuture(page), timeout)
+
+  def pageExistsByHashFuture(page: List[PageRow]): Future[Seq[PageRow]] =
+    db.run(CrawlerDIO.pageExistsByHash(page))
+
+  def pageExistsByHash(page: List[PageRow]): Seq[PageRow] =
+    Await.result(pageExistsByUrlFuture(page), timeout)
 
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))
 
+  def linkPagesFuture(fromPage: PageRow, toPages: List[PageRow]): Future[List[LinkRow]] =
+    db.run(CrawlerDIO.linkPages(fromPage, toPages))
+
   def linkPages(fromPage: PageRow, toPage: PageRow): LinkRow =
     Await.result(linkPagesFuture(fromPage, toPage), timeout)
+
+  def linkPages(fromPage: PageRow, toPages: List[PageRow]): List[LinkRow] =
+    Await.result(linkPagesFuture(fromPage, toPages), timeout)
+
+  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): List[LinkRow] =
+    Await.result(linkPagesFuture(fromPage, toPages.toList), timeout)
 
   // bulk read
   def getPageLinksFuture(id: Int): Future[(PageRow, Seq[PageRow])] =
@@ -83,6 +155,4 @@ class DBService(dbConfig: String) {
 
   def getPageContent(page: PageRow): (Seq[ImageRow], Seq[PageDataRow]) =
     Await.result(getPageContentFuture(page.id), timeout)
-
-  def closeDb(): Unit = db.close()
 }

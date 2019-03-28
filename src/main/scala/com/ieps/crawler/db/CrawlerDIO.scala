@@ -9,8 +9,13 @@ import scala.concurrent.ExecutionContext
 object CrawlerDIO {
   implicit val ec: ExecutionContext = ExecutionContext.global
 
-  def findSiteById(id: Int): DBIO[Option[SiteRow]] = Query.siteById(id).result.headOption
+  def findSiteById(id: Int): DBIO[SiteRow] = Query.siteById(id).result.head
+  def findSiteByIdOption(id: Int): DBIO[Option[SiteRow]] = Query.siteById(id).result.headOption
   def findPageByIdOption(id: Int): DBIO[Option[PageRow]] = Page.filter(_.id === id).result.headOption
+  def findSiteByDomain(domain: String): DBIO[SiteRow] = Site.filter(_.domain === domain).result.head
+  def findPageByDomainOption(domain: String): DBIO[Option[SiteRow]] = Site.filter(_.domain === domain).result.headOption
+  def findPageByUrl(page: PageRow): DBIO[PageRow] = Page.filter(_.url === page.url).result.head
+  def findPageByUrlOption(page: PageRow): DBIO[Option[PageRow]] = Page.filter(_.url === page.url).result.headOption
   def findPageById(id: Int): DBIO[PageRow] = Page.filter(_.id === id).result.head
   def findPageByIds(ids: Seq[Int]): DBIO[Seq[PageRow]] = Page.filter(_.id inSet ids).result
   def findPageByLinkTarget(links: Seq[LinkRow]): DBIO[Seq[PageRow]] = Page.filter(_.id inSet links.map(_.toPage)).result
@@ -35,26 +40,90 @@ object CrawlerDIO {
   def getDataTypes: DBIO[Seq[DataTypeRow]] = Query.dataTypes
 
   // insert statements
-  def insertSite(site: SiteRow): DBIO[SiteRow] = (Query.writeSite += site).transactionally
-  def insertPage(page: PageRow): DBIO[PageRow] = (Query.writePage += page).transactionally
-  def insertOrUpdatePage(page: PageRow): DBIO[PageRow] = {
-    val query = Page.filter(_.id === page.id)
+  def insertSite(site: SiteRow): DBIO[SiteRow] = (Query.writeSite += site)
+  def insertOrUpdateSite(site: SiteRow): DBIO[SiteRow] = {
+    val query = Site.filter(existing => existing.id === site.id)
     val existsAction = query.exists.result
     (for {
       exists <- existsAction
-      result <- exists match {
-        case true =>
-          query.update(page).flatMap{ _ => findPageById(page.id)}.transactionally
-        case false => {
-          insertPage(page).flatMap(pageRow => findPageById(pageRow.id)).transactionally //transactionally is important
-        }
+      result <- if (exists) {
+        query.update(site).flatMap { _ => findSiteById(site.id) }
+      } else {
+        insertSite(site).flatMap(pageRow => findSiteById(pageRow.id)) //transactionally is important
+      }
+    } yield result).transactionally
+  }
+  def insertPage(page: PageRow): DBIO[PageRow] = (Query.writePage += page)
+  def insertPage(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = (Query.writePage ++= pages)
+  def insertPage(pages: List[PageRow]): DBIO[Seq[PageRow]] = insertPage(pages.toSeq)
+//  def insertPage(pages: List[PageRow]): DBIO[List[PageRow]] = DBIO.sequence(pages.map(page => Query.writePage += page)).transactionally
+  def insertOrUpdatePage(page: PageRow): DBIO[PageRow] = {
+    val query = Page.filter(existing => existing.id === page.id)
+    val existsAction = query.exists.result
+    (for {
+      exists <- existsAction
+      result <- if (exists) {
+        query.update(page).flatMap { _ => findPageById(page.id) }
+      } else {
+        insertPage(page).flatMap(pageRow => findPageById(pageRow.id)) //transactionally is important
       }
     } yield result).transactionally
   }
 
-  def insertPages(pages: Seq[PageRow]): DBIO[Seq[PageRow]] = Query.writePage ++= pages
+  def insertIfNotExistsByUrl(page: PageRow): DBIO[PageRow] =
+    Page.filter(p => p.url === page.url).result.headOption.flatMap {
+      case Some(foundPage) => DBIO.successful(foundPage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case None => insertIfNotExistsByHash(page)
+    }.transactionally
+
+  def insertIfNotExistsByHash(page: PageRow): DBIO[PageRow] =
+    Page.filter(p => p.hash === page.hash).result.headOption.flatMap {
+      case Some(foundPage) => DBIO.successful(foundPage) // is duplicate
+      case None => insertPage(page)
+    }.transactionally
+
+  def insertIfNotExistsByDomain(site: SiteRow): DBIO[SiteRow] =
+    Site.filter(p => p.domain === site.domain).result.headOption.flatMap {
+      case Some(foundPage) => DBIO.successful(foundPage)//findSiteByDomain(site.domain.get)
+      case None => insertSite(site)
+    }.transactionally
+
+  def insertIfNotExistsByUrl(pages: List[PageRow]): DBIO[List[PageRow]] =
+    DBIO.sequence(pages.map(page => insertIfNotExistsByUrl(page))).transactionally
+  def insertIfNotExistsByUrl(pages: Seq[PageRow]): DBIO[List[PageRow]] =
+    insertIfNotExistsByUrl(pages.toList)
+  def insertOrUpdatePage(pages: List[PageRow]): DBIO[List[PageRow]] =
+    DBIO.sequence(pages.map(page => insertOrUpdatePage(page))).transactionally
+  def insertOrUpdatePage(pages: Seq[PageRow]): DBIO[List[PageRow]] =
+    insertOrUpdatePage(pages.toList)
+  def pageExistsByUrl(pageRow: PageRow): DBIO[Boolean] =
+    Page.filter(page => (page.url.isDefined && page.url === pageRow.url) || (page.hash.isDefined && page.hash === pageRow.hash)).exists.result
+
+  def pageExistsByUrl(pageRow: List[PageRow]): DBIO[Seq[PageRow]] = {
+    val urls = pageRow.filter(_.url.isEmpty).map(_.url.get)
+    Page.filter(row => row.url.inSet(urls)).result
+  }
+
+  def pageExistsByHash(pageRow: PageRow): DBIO[Boolean] =
+    Page.filter(page => page.hash.isDefined && page.hash === pageRow.hash).exists.result
+
+  def pageExistsByHash(pageRow: List[PageRow]): DBIO[Seq[PageRow]] = {
+    val hashes = pageRow.filter(_.hash.isEmpty).map(_.hash.get)
+    Page.filter(row => row.hash.inSet(hashes)).result
+  }
+
+
+
   def insertLink(link: LinkRow): DBIO[LinkRow] = Query.writeLink += link
-  def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLink(LinkRow(fromPage.id, toPage.id))
+  def insertLinkIfNotExists(link: LinkRow): DBIO[LinkRow] =
+    Link.filter(l => l.fromPage === link.fromPage && l.toPage === link.toPage).result.headOption.flatMap {
+      case Some(foundLink) => DBIO.successful(foundLink)
+      case None => insertLink(link)
+    }.transactionally
+  def linkPages(fromPage: PageRow, toPage: PageRow): DBIO[LinkRow] = insertLinkIfNotExists(LinkRow(fromPage.id, toPage.id))
+  def linkPages(fromPage: PageRow, toPages: List[PageRow]): DBIO[List[LinkRow]] =
+    DBIO.sequence(toPages.map(toPage => insertLinkIfNotExists(LinkRow(fromPage.id, toPage.id))))
+  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): DBIO[List[LinkRow]] = linkPages(fromPage, toPages.toList)
   def insertImage(image: ImageRow): DBIO[ImageRow] = Query.writeImage += image
   def insertImages(images: Seq[ImageRow]): DBIO[Seq[ImageRow]] = Query.writeImage ++= images
   def insertPageData(pageData: PageDataRow): DBIO[PageDataRow] = Query.writePageData += pageData
@@ -72,19 +141,23 @@ object CrawlerDIO {
 
   def insertSiteWithPages(site: SiteRow, pages: Seq[PageRow]): DBIO[(SiteRow, Seq[PageRow])] = for {
     site <- insertSite(site)
-    page <- insertPages(pages.map(page => page.copy(siteId = Some(site.id))))
+    page <- insertPage(pages.map(page => page.copy(siteId = Some(site.id))))
   } yield (site, page)
 
   def insertPageWithContent(
      page: PageRow,
      images: Seq[ImageRow],
-     pageDatum: Seq[PageDataRow]
-  ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow])] =
-    for {
-      insertedPage      <- insertOrUpdatePage(page) // might cause a problem cause it's of type Option[PageRow] --> CAREFUL
-      insertedImages    <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id))))
-      insertedPageData  <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id))))
-    } yield(insertedPage, insertedImages, insertedPageData)
+     pageDatum: Seq[PageDataRow],
+     pageLinks: Seq[PageRow]
+  ): DBIO[(PageRow, Seq[ImageRow], Seq[PageDataRow], Seq[PageRow])] =(
+      for {
+        insertedPage      <- insertIfNotExistsByUrl(page).transactionally // might cause a problem cause it's of type Option[PageRow] --> CAREFUL
+        insertedImages    <- insertImages(images.map(image => image.copy(pageId = Option(insertedPage.id)))).transactionally
+        insertedPageData  <- insertPageData(pageDatum.map(pageData => pageData.copy(pageId = Option(insertedPage.id)))).transactionally
+        insertedLinks     <- insertIfNotExistsByUrl(pageLinks).transactionally
+        _ <- linkPages(insertedPage, insertedLinks).transactionally // link the inserted pages
+      } yield(insertedPage, insertedImages, insertedPageData, insertedLinks)
+    ).transactionally
 
   object Query {
     import Tables._
