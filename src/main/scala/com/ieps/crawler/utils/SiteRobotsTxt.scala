@@ -1,5 +1,7 @@
 package com.ieps.crawler.utils
 
+import java.net.URI
+
 import com.ieps.crawler.db.Tables.{PageRow, SiteRow}
 import com.typesafe.scalalogging.StrictLogging
 import crawlercommons.robots.{SimpleRobotRules, SimpleRobotRulesParser}
@@ -38,5 +40,15 @@ class SiteRobotsTxt(
         case None => true // allow all by default
       }
     else false
+  }
+
+  def pageBelongs(pageRow: PageRow): Boolean = {
+    if(pageRow.url.isDefined) {
+      val url = pageRow.url.get
+      site.domain match {
+        case Some(domain) => Canonical.extractDomain(url) == domain
+        case None => false
+      }
+    } else false
   }
 }

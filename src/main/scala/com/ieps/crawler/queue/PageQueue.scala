@@ -12,7 +12,12 @@ import com.typesafe.scalalogging.LazyLogging
 
 import scala.collection.mutable
 
-class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = false) extends Queue[QueuePageEntry] with LazyLogging {
+class PageQueue(
+  folder: String,
+  clearState: Boolean = false,
+  bigQueuePageSize: Integer = 32 * 1024 * 1024
+) extends Queue[QueuePageEntry]
+  with LazyLogging {
   import Queue.DateTimeISO8601CodecJsons._
 
   implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec10(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "hash", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
@@ -55,7 +60,8 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
-    items.filter(element => addIfNotInQueue(element.pageInQueue)).foreach(enqueue)
+//    items.filter(element => addIfNotInQueue(element.pageInQueue)).foreach(enqueue)
+    items.foreach(enqueue)
     logger.info(s"Queue size: ${size()}")
   }
 

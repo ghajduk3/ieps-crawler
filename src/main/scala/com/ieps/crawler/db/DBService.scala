@@ -1,5 +1,6 @@
 package com.ieps.crawler.db
 
+import com.ieps.crawler.db
 import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.duration._
@@ -70,11 +71,11 @@ class DBService(db: Database) {
   def insertOrUpdatePage(page: PageRow): PageRow =
     insertOrUpdatePage(List(page)).head
 
-  def insertIfNotExistsByUrlFuture(page: PageRow): Future[PageRow] =
-    db.run(CrawlerDIO.insertIfNotExistsByUrl(page))
+  def insertIfNotExistsFuture(page: PageRow): Future[PageRow] =
+    db.run(CrawlerDIO.insertIfNotExists(page))
 
-  def insertIfNotExistsByUrl(page: PageRow): PageRow =
-    Await.result(insertIfNotExistsByUrlFuture(page), timeout)
+  def insertIfNotExists(page: PageRow): PageRow =
+    Await.result(insertIfNotExistsFuture(page), timeout)
 
   // bulk insert
   def insertSiteWithPageFuture(site: SiteRow, page: PageRow): Future[(SiteRow, PageRow)] =
@@ -113,6 +114,18 @@ class DBService(db: Database) {
   def pageExistsByHash(page: PageRow): Boolean =
     Await.result(pageExistsByHashFuture(page), timeout)
 
+  def pageExistsFuture(page: PageRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageExists(page))
+
+  def pageExists(page: PageRow): Boolean =
+    Await.result(pageExistsFuture(page), timeout)
+
+  def pageExistsFuture(page: List[PageRow]): Future[List[Boolean]] =
+    db.run(CrawlerDIO.pageExists(page))
+
+  def pageExists(page: List[PageRow]): List[Boolean] =
+    Await.result(pageExistsFuture(page), timeout)
+
   def pageExistsByHashFuture(page: List[PageRow]): Future[Seq[PageRow]] =
     db.run(CrawlerDIO.pageExistsByHash(page))
 
@@ -122,17 +135,20 @@ class DBService(db: Database) {
   def linkPagesFuture(fromPage: PageRow, toPage: PageRow): Future[LinkRow] =
     db.run(CrawlerDIO.linkPages(fromPage, toPage))
 
-  def linkPagesFuture(fromPage: PageRow, toPages: List[PageRow]): Future[List[LinkRow]] =
-    db.run(CrawlerDIO.linkPages(fromPage, toPages))
+  def linkPagesFuture(fromPage: PageRow, toPages: List[PageRow]): Future[Seq[LinkRow]] =
+    db.run(CrawlerDIO.insertLinkIfNotExists(fromPage, toPages))
 
   def linkPages(fromPage: PageRow, toPage: PageRow): LinkRow =
     Await.result(linkPagesFuture(fromPage, toPage), timeout)
 
-  def linkPages(fromPage: PageRow, toPages: List[PageRow]): List[LinkRow] =
+  def linkPages(fromPage: PageRow, toPages: List[PageRow]): Seq[LinkRow] =
     Await.result(linkPagesFuture(fromPage, toPages), timeout)
 
-  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): List[LinkRow] =
+  def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): Seq[LinkRow] =
     Await.result(linkPagesFuture(fromPage, toPages.toList), timeout)
+
+  def linkPages(fromPage: Option[PageRow], toPage: PageRow): Option[LinkRow] =
+    fromPage.map(fromPage => linkPages(fromPage, toPage))
 
   // bulk read
   def getPageLinksFuture(id: Int): Future[(PageRow, Seq[PageRow])] =

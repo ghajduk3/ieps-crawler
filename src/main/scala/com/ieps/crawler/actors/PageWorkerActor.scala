@@ -23,7 +23,7 @@ object PageWorkerActor {
 
   case object StartWorker
 
-  case object ProcessNextPage
+  case object ProcessPage
 
   case object WorkerStatusRequest
 
@@ -55,7 +55,7 @@ class PageWorkerActor(
 
   override def receive: Receive = LoggingReceive {
 
-    case StartWorker | ProcessNextPage =>
+    case StartWorker | ProcessPage =>
       pageQueue.hasMorePages match {
         case true =>
           val processed = pageQueue.dequeue().map(queueEntry => {
@@ -71,7 +71,7 @@ class PageWorkerActor(
                         case Success(pageWithContent: PageRow) =>
                           logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
                           Utils.retryWithBackoff(logRetry = true) {
-                            val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id)))
+                            val insertedPage: PageRow = dbService.insertIfNotExists(pageWithContent.copy(siteId = Some(site.id)))
                             referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
                             val httpStatusCode = insertedPage.httpStatusCode.get
 
@@ -88,23 +88,23 @@ class PageWorkerActor(
                         case Failure(exception) => exception match {
                           case FailedAttempt(message, cause, failedPage: PageRow) =>
                             Utils.retryWithBackoff(logRetry = true) {
-                              dbService.insertIfNotExistsByUrl(failedPage.copy(siteId = Some(site.id)))
+                              dbService.insertIfNotExists(failedPage.copy(siteId = Some(site.id)))
                             }
                         }
                           logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
                       }
                       val delay = robots.getDelay + ((2 + rand.nextInt(20)) seconds).toMillis // adding jitter to be more crawl-friendly
                       logger.info(s"$logInstanceIdentifier Waiting for ${delay / 1000L}s")
-                      context.system.scheduler.scheduleOnce(FiniteDuration(delay, MILLISECONDS), self, ProcessNextPage)
+                      context.system.scheduler.scheduleOnce(FiniteDuration(delay, MILLISECONDS), self, ProcessPage)
                     } else {
                       logger.warn(s"$logInstanceIdentifier Duplicate page: ${queuedPage.url.get}")
-                      self ! ProcessNextPage
+                      self ! ProcessPage
                     }
                   }
                   case false =>
-                    dbService.insertIfNotExistsByUrl(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED")))
+                    dbService.insertIfNotExists(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED")))
                     logger.warn(s"$logInstanceIdentifier Site not allowed: ${queuedPage.url.get}")
-                    self ! ProcessNextPage
+                    self ! ProcessPage
                 }
                 true
               })
@@ -112,14 +112,14 @@ class PageWorkerActor(
               case e: Exception =>
                 logger.error(s"$logInstanceIdentifier Failed processing ${queuedPage.url.get}: ${e.getMessage}")
                 e.printStackTrace()
-                self ! ProcessNextPage
+                self ! ProcessPage
             }
             true
           })
-          if (processed.isEmpty) self ! ProcessNextPage
+          if (processed.isEmpty) self ! ProcessPage
         case false =>
           logger.info(s"$logInstanceIdentifier Queue is empty. Retrying in 10s")
-          context.system.scheduler.scheduleOnce(FiniteDuration(10, SECONDS), self, ProcessNextPage)
+          context.system.scheduler.scheduleOnce(FiniteDuration(10, SECONDS), self, ProcessPage)
       }
 
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
