@@ -1,11 +1,11 @@
 package com.ieps.crawler.actors
 
-import akka.actor.Actor
+import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db
 import com.ieps.crawler.db.{DBService, Tables}
 import com.ieps.crawler.db.Tables.{PageRow, SiteRow}
-import com.ieps.crawler.queue.PageQueue
+import com.ieps.crawler.queue.{DataQueue, PageQueue}
 import com.ieps.crawler.queue.Queue.{QueueDataEntry, QueuePageEntry}
 import com.ieps.crawler.utils.HeadlessBrowser.FailedAttempt
 import com.ieps.crawler.utils._
@@ -20,16 +20,18 @@ import scala.util.{Failure, Success}
 
 object DomainWorkerActor {
 
+  def props(workerId: String, db: Database, pageQueue: PageQueue) = Props(new DomainWorkerActor(workerId, db, pageQueue))
+
   // to be received from the FrontierManager
-  case class ProcessDomain(siteRow: SiteRow) // !! has to be previously persisted to disk
+  case class ProcessDomain(siteRow: SiteRow, initialUrls: List[QueuePageEntry]) // !! has to be previously persisted to disk
   case class AddLinksToLocalQueue(links: List[QueuePageEntry])
   case object ProcessNextPage // self-sending the next message
 }
 
 class DomainWorkerActor(
     val workerId: String,
-    val queue: PageQueue,
-    val db: Database
+    val db: Database,
+    val queue: PageQueue
   ) extends Actor
     with StrictLogging {
   import DomainWorkerActor._
@@ -48,7 +50,7 @@ class DomainWorkerActor(
   private var currentSite: Option[SiteRobotsTxt]= None
 
   override def receive: Receive = LoggingReceive {
-    case ProcessDomain(site) =>
+    case ProcessDomain(site, initialUrls) =>
       currentSite = Some(new SiteRobotsTxt(site))
 
       queue.enqueue(QueuePageEntry(PageRow(

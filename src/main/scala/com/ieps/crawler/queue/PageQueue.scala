@@ -14,6 +14,7 @@ import scala.collection.mutable
 
 class PageQueue(
   folder: String,
+  queueName: String = "mainQueue",
   clearState: Boolean = false,
   bigQueuePageSize: Integer = 32 * 1024 * 1024
 ) extends Queue[QueuePageEntry]
@@ -23,7 +24,7 @@ class PageQueue(
   implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec10(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "hash", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
   implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec2(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "siteId")
 
-  private val queue: BigQueueImpl = new BigQueueImpl(folder, "pageQueue", bigQueuePageSize) // default page size is 128MB
+  private val queue: BigQueueImpl = new BigQueueImpl(folder, queueName, bigQueuePageSize) // default page size is 128MB
   private val uniqueElements: mutable.TreeSet[String] = mutable.TreeSet.empty // keeps only unique elements in the queue
 
   if (clearState) {
