@@ -31,8 +31,8 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
           newImages = newImages :+ PageRow(
             id = -1,
             siteId = Some(pageSource.id),
-            pageTypeCode = Some(conType(imageLink).toUpperCase()),
-            url = Some(imageLink),
+            pageTypeCode = conType(imageLink),
+            url = imageLink,
           )
         }
         catch {
@@ -91,14 +91,14 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
 
   private def extractLink(url: String): String = {
     try {
-      Canonical.getCanonical(url)
+      Canonical.getCanonical(url).get
     } catch {
       case _: Exception =>
-        Canonical.getCanonical(siteSource.domain.get + url)
+        Canonical.getCanonical(siteSource.domain.get + url).get
     }
   }
 
-  private def imgLink(url: String): String = {
+  private def imgLink(url: String): Option[String] = {
     try {
       Canonical.getCanonical(url)
     }
@@ -111,11 +111,10 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         } else {
           siteSource.domain.get + url
         }
-        url1 = Canonical.getCanonical(url1)
-        url1
+        Canonical.getCanonical(url1)
     }
   }
 
-  private def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
+  private def conType(url: Option[String]):Option[String] = url.map(url => url.slice(url.lastIndexOf(".") + 1, url.last).toUpperCase())
 
 }

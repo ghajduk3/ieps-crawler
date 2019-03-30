@@ -62,7 +62,7 @@ class DomainWorkerActor(
       queue.enqueueAll(List(QueuePageEntry(PageRow(
         id = -1,
         siteId = Some(site.id),
-        url = Some(Canonical.getCanonical(site.domain.get)),
+        url = Canonical.getCanonical(site.domain.get),
         storedTime = Some(DateTime.now(DateTimeZone.UTC))
       ))) ++ initialUrls)
       self ! ProcessNextPage

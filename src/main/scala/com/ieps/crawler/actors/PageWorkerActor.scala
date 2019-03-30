@@ -132,26 +132,30 @@ class PageWorkerActor(
         val domain = Some(Canonical.extractDomain(page.url.get))
         logger.info(s"$logInstanceIdentifier domain = $domain")
         var site = SiteRow(-1, domain)
-        browser.getRobotsTxt(Canonical.getCanonical(site.domain.get)).foreach(content => {
-          site = site.copy(robotsContent = Some(content))
-          val robotsTxt = new SiteRobotsTxt(site)
-          if (robotsTxt.getSitemaps.size > 1) {
-            logger.warn(s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
-          }
-          robotsTxt.getSitemaps.foreach(sitemap => sitemap.foreach(url => {
-            Try(browser.getUrlContent(url)) match {
-              case Success(Some(content: String)) =>
-                site = site.copy(sitemapContent = Some(content))
-                val siteMapUrls = duplicate.deduplicatePages(SiteMaps.getSiteMapUrls(url, site)).map(page => QueuePageEntry(page))
-                pageQueue.enqueueAll(siteMapUrls)
-              case _ =>
-                logger.info(s"$logInstanceIdentifier something is wrong?")
+        val canonicalDomain = Canonical.getCanonical(site.domain.get)
+        if(canonicalDomain.isDefined) {
+          browser.getRobotsTxt(canonicalDomain.get).foreach(content => {
+            site = site.copy(robotsContent = Some(content))
+            val robotsTxt = new SiteRobotsTxt(site)
+            if (robotsTxt.getSitemaps.size > 1) {
+              logger.warn(s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
             }
-          }))
-        })
+            robotsTxt.getSitemaps.foreach(sitemap => sitemap.foreach(url => {
+              Try(browser.getUrlContent(url)) match {
+                case Success(Some(content: String)) =>
+                  site = site.copy(sitemapContent = Some(content))
+                  val siteMapUrls = duplicate.deduplicatePages(SiteMaps.getSiteMapUrls(url, site)).map(page => QueuePageEntry(page))
+                  pageQueue.enqueueAll(siteMapUrls)
+                case _ =>
+                  logger.info(s"$logInstanceIdentifier something is wrong?")
+              }
+            }))
+          })
+        }
         Utils.retryWithBackoff {
           Some(dbService.insertIfNotExistsByDomain(site))
         }
+
     }
   }
 }

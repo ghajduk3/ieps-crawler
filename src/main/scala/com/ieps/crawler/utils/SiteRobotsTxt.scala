@@ -1,7 +1,5 @@
 package com.ieps.crawler.utils
 
-import java.net.URI
-
 import com.ieps.crawler.db.Tables.{PageRow, SiteRow}
 import com.typesafe.scalalogging.StrictLogging
 import crawlercommons.robots.{SimpleRobotRules, SimpleRobotRulesParser}
@@ -16,7 +14,7 @@ class SiteRobotsTxt(
   val robotNames: String = "*"
 ) extends StrictLogging {
   private val robotsRulesParser: SimpleRobotRulesParser = new SimpleRobotRulesParser()
-  private val robotRules: Option[SimpleRobotRules] = site.robotsContent.map(robotsContent => robotsRulesParser.parseContent(Canonical.getCanonical(site.domain.get).concat("robots.txt"), robotsContent.getBytes(), contentType, robotNames))
+  private val robotRules: Option[SimpleRobotRules] = site.robotsContent.map(robotsContent => robotsRulesParser.parseContent(Canonical.getCanonical(site.domain.get).getOrElse(site.domain.get).concat("robots.txt"), robotsContent.getBytes(), contentType, robotNames))
   private val defaultCrawlDelay = (4 seconds).toMillis
 
   def getRobotRules: Option[List[SimpleRobotRules.RobotRule]] = robotRules.map(rules => rules.getRobotRules.asScala.toList)

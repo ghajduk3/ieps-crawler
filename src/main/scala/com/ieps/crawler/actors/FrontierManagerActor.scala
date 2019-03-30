@@ -129,26 +129,31 @@ class FrontierManagerActor(
             (site, List.empty)
           case None =>
             var site = SiteRow(-1, Some(domain))
-            val sitemapUrls: Option[List[QueuePageEntry]] = browser.getRobotsTxt(Canonical.getCanonical(domain)).map(content => {
-              site = site.copy(robotsContent = Some(content))
-              val robotsTxt = new SiteRobotsTxt(site)
-              robotsTxt.getSitemaps match {
-                case Some(siteMaps) => siteMaps.flatMap(url => {
-                  Try(browser.getUrlContent(url)) match {
-                    case Success(Some(content: String)) =>
-                      site = site.copy(sitemapContent = Some(content))
-                      SiteMaps.getSiteMapUrls(url, site).map(QueuePageEntry(_))
-                    case _ => List.empty
-                  }
-                })
-                case None => List.empty
-              }
-            })
+            try {
+              val sitemapUrls: Option[List[QueuePageEntry]] = browser.getRobotsTxt(Canonical.getCanonical(domain).get).map(content => {
+                site = site.copy(robotsContent = Some(content))
+                val robotsTxt = new SiteRobotsTxt(site)
+                robotsTxt.getSitemaps match {
+                  case Some(siteMaps) => siteMaps.flatMap(url => {
+                    Try(browser.getUrlContent(url)) match {
+                      case Success(Some(content: String)) =>
+                        site = site.copy(sitemapContent = Some(content))
+                        SiteMaps.getSiteMapUrls(url, site).map(QueuePageEntry(_))
+                      case _ => List.empty
+                    }
+                  })
+                  case None => List.empty
+                }
+              })
 
-            (dbService.insertIfNotExistsByDomain(site), sitemapUrls match {
+              (dbService.insertIfNotExistsByDomain(site), sitemapUrls match {
                 case Some(urls) => urls
                 case None => List.empty
-            })
+              })
+            } catch {
+              case e: Exception =>
+                (dbService.insertIfNotExistsByDomain(site), List.empty)
+            }
         }
     }
   }
