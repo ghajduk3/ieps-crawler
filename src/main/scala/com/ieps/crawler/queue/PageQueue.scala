@@ -22,7 +22,7 @@ class PageQueue(
   import Queue.DateTimeISO8601CodecJsons._
 
   implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec10(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "hash", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
-  implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec2(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "siteId")
+  implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec3(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "dataType", "siteId")
 
   private val queue: BigQueueImpl = new BigQueueImpl(folder, queueName, bigQueuePageSize) // default page size is 128MB
   private val uniqueElements: mutable.TreeSet[String] = mutable.TreeSet.empty // keeps only unique elements in the queue

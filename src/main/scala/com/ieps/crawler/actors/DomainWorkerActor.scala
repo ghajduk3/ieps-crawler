@@ -62,7 +62,8 @@ class DomainWorkerActor(
       queue.enqueueAll(List(QueuePageEntry(PageRow(
         id = -1,
         siteId = Some(site.id),
-        url = Some(Canonical.getCanonical(site.domain.get))
+        url = Some(Canonical.getCanonical(site.domain.get)),
+        storedTime = Some(DateTime.now(DateTimeZone.UTC))
       ))) ++ initialUrls)
       self ! ProcessNextPage
 
@@ -88,16 +89,9 @@ class DomainWorkerActor(
       queue.enqueueAll(links)
 
     case  ProcessNextPage =>
-      // TODO:
-      //  - check if allowed
-      //  - check if duplicate
-      //  - get page source
-      //  - extract links, images, data
-      //  - persist current page to db
-      //  - link to previous if defined
+      isWaiting = false
         if (!queue.hasMorePages) {
           logger.info(s"$logInstanceIdentifier queue is empty.")
-//          self ! StatusReport
         } else {
           queue.dequeue().map(processPage).foreach {
             case List() =>
@@ -117,7 +111,6 @@ class DomainWorkerActor(
       return List.empty
     } else {
       // handle original pages
-      isWaiting = false
       val masterQueueEntries = handleAllowed(queueEntry)
       context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
       isWaiting = true
@@ -159,20 +152,30 @@ class DomainWorkerActor(
           val extractor = new ExtractFromHTML(insertedPage, currentSite.get.site)
           // enqueue the extracted links
           val allLinks: Option[List[PageRow]] = extractor.getPageLinks//
-          allLinks.foreach( links => { // TODO: test
+          allLinks.foreach( links => {
             dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
             val domainLinks = filterDomainPages(Some(links)).get
-            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
+            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 0, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
           })
           // TODO: handle page data and images in a similar manner to the links
           // enqueue the page data
-          extractor.getPageData//.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
+          /*extractor.getPageData.foreach( links => {
+            dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
+            val domainLinks = filterDomainPages(Some(links)).get
+            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 2, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
+          })
+          //.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
           // enqueue the images
-          extractor.getImages//.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
+          extractor.getImages.foreach( links => {
+//            dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
+            val domainLinks = filterDomainPages(Some(links)).get
+            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 1, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
+          })*/
+          //.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
 
           filterNonDomainPages(allLinks) match {
             case Some(links) =>
-              duplicate.deduplicatePages(links).map(QueuePageEntry(_, Some(insertedPage.copy(htmlContent = None))))
+              duplicate.deduplicatePages(links).map(QueuePageEntry(_, 0, Some(insertedPage.copy(htmlContent = None))))
             case None => List.empty
           }
         } else {

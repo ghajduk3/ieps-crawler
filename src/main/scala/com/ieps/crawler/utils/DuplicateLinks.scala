@@ -18,6 +18,6 @@ class DuplicateLinks(db: Database) extends StrictLogging {
   }
 
   def duplicatePages(pageRows: List[PageRow]): Seq[PageRow] = {
-    dbService.pageExistsByUrl(pageRows)
+    pageRows.zip(dbService.pageExists(pageRows)).filter(_._2).map(_._1)
   }
 }

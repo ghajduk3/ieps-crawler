@@ -81,7 +81,7 @@ object CrawlerDIO {
 
   def insertIfNotExistsByHash(page: PageRow): DBIO[PageRow] =
     Page.filter(p => p.hash === page.hash).result.headOption.flatMap {
-      case Some(foundPage) => DBIO.successful(foundPage) // is duplicate
+      case Some(foundPage) => insertPage(page.copy(pageTypeCode = Some("DUPLICATE"))) // is duplicate
       case None => insertPage(page)
     }.transactionally
 

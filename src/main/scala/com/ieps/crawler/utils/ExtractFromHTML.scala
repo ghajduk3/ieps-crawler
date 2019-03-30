@@ -1,5 +1,7 @@
 package com.ieps.crawler.utils
 
+import java.net.{URI, URL}
+
 import com.ieps.crawler
 import com.ieps.crawler.db
 import com.ieps.crawler.db.Tables
@@ -19,14 +21,19 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   private val document: Option[Document] = pageSource.htmlContent.map(htmlContent => Jsoup.parse(htmlContent))
 
   //method that gets src from <img> tags
-  def getImages: Option[List[ImageRow]] = {
+  def getImages: Option[List[PageRow]] = {
     document.map( doc => {
       val imgs = doc.select("img[src]").asScala
-      var newImages = List.empty[ImageRow]
+      var newImages = List.empty[PageRow]
       imgs.foreach(img => {
         try {
-          val actualImg = imgLink(img.attr("src"))
-          newImages = newImages :+ ImageRow(-1, Some(pageSource.id), Some(actualImg), Some(conType(actualImg)))
+          val imageLink = imgLink(img.attr("src"))
+          newImages = newImages :+ PageRow(
+            id = -1,
+            siteId = Some(pageSource.id),
+            pageTypeCode = Some(conType(imageLink).toUpperCase()),
+            url = Some(imageLink),
+          )
         }
         catch {
           case e: Exception =>
@@ -75,7 +82,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   }
 
   def getPageLinks: Option[List[PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")))
+    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")).filter(!_.url.get.contains("///")))
   }
 
   def getPageData: Option[List[Tables.PageRow]] = {

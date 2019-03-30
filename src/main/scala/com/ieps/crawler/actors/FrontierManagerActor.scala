@@ -19,7 +19,7 @@ import scala.util.Random
 
 object FrontierManagerActor {
 
-  def props(db: Database, pageQueue: PageQueue): Props = Props(new FrontierManagerActor(db, pageQueue))
+  def props(db: Database): Props = Props(new FrontierManagerActor(db))
 
   case class InitializeFrontier(initialUrls: List[String])
   case class AddLinksToFrontier(links: List[QueuePageEntry])
@@ -30,9 +30,7 @@ object FrontierManagerActor {
 
 class FrontierManagerActor(
    val db: Database,
-   val pageQueue: PageQueue,
-   val maxWorkers: Int = 8
-//   val dataQueue: DataQueue,
+   val maxWorkers: Int = 16
  ) extends Actor
    with StrictLogging {
   import DomainWorkerActor._
@@ -75,15 +73,13 @@ class FrontierManagerActor(
         })
       })
 
-    case AddLinksToFrontier(links) => // TODO
-//      logger.info(s"Adding new links to frontier: ${links.size}")
+    case AddLinksToFrontier(links) =>
       links.groupBy(link => inferSite(link.pageInQueue.url.get)._1).foreach {
         case (site, list) =>
           domainWorkers.get(site.domain.get) match {
             case Some(Some(worker)) =>
               worker ! AddLinksToLocalQueue(list)
             case Some(None) =>
-//              logger.info(s"Adding to workerless domain ${list.size}")
               val (_, queue) = sitesQueue(site.domain.get)
               sitesQueue(site.domain.get) = (site, queue ++ list)
             case None =>
@@ -92,7 +88,6 @@ class FrontierManagerActor(
                 case Some(worker) =>
                   worker ! ProcessDomain(site, list)
                 case None =>
-//                  logger.info("No available workers.")
               }
           }
       }
@@ -101,19 +96,18 @@ class FrontierManagerActor(
       logger.info(s"New domain request, done ${currentSite.domain.get}")
       currentSite.domain.foreach(currentDomain => {
         domainWorkers.get(currentDomain) match {
-          case Some(Some(worker)) =>
+          case Some(Some(_)) =>
             getWorkerlessDomain(currentDomain).foreach {
-              case (newDomain, None) =>
+              case newDomain =>
                 sitesQueue.get(newDomain) match {
                   case Some((site, urls)) =>
-                    domainWorkers(newDomain) = Some(worker)
+                    domainWorkers(newDomain) = Some(sender())
                     domainWorkers(currentDomain) = None
-                    worker ! ProcessDomain(site, urls)
+                    sitesQueue(newDomain) = (site, List.empty)
+                    sender() ! ProcessDomain(site, urls)
                   case _ =>
                     logger.warn("[new domain] No free domains currently.")
                 }
-              case any: Any =>
-                logger.error(s"[new domain] WTF? worker is defined??? $any")
             }
           case Some(None) =>
             logger.error(s"[new domain] WTF? no worker??")
@@ -159,9 +153,9 @@ class FrontierManagerActor(
     }
   }
 
-  def getWorkerlessDomain(filterDomain: String): Option[(String, Option[ActorRef])] = {
-    val filtered: immutable.Seq[(String, Option[ActorRef])] = domainWorkers.toList.filter(entry => entry._1 != filterDomain && entry._2.isEmpty)
-    Random.shuffle(filtered).headOption
+  def getWorkerlessDomain(filterDomain: String): Option[String] = {
+    val filtered: immutable.Seq[(String, Option[ActorRef])] = domainWorkers.toList.filter(entry => entry._2.isEmpty).filter(_._1 != filterDomain)
+    Random.shuffle(filtered.map(_._1)).headOption
   }
 
   def spawnNewWorker(domain: String): Option[ActorRef] = {
@@ -176,7 +170,6 @@ class FrontierManagerActor(
         workers += worker
         Some(worker)
       } else {
-//        logger.info(s"Maximum number of workers achieved, waiting the first to free")
         domainWorkers(domain) = None
         None
       }

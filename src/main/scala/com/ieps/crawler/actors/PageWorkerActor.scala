@@ -78,11 +78,11 @@ class PageWorkerActor(
                             if (200 <= httpStatusCode && httpStatusCode < 400) {
                               val extractor = new ExtractFromHTML(insertedPage, site)
                               // enqueue the extracted links // TODO: add time waited
-                              extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
+                              extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, 0, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
                               // enqueue the page data
                               extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
                               // enqueue the images
-                              extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
+                              extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.url.get))).foreach(dataQueue.enqueueAll)
                             } //else logger.warn(s"Got status code $httpStatusCode")
                           }
                         case Failure(exception) => exception match {
