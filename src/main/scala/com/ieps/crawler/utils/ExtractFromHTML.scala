@@ -30,7 +30,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         }
         catch {
           case e: Exception =>
-            logger.error(s"Error occurred while extracting image: ${e.getMessage}")
+//            logger.error(s"Error occurred while extracting image: ${e.getMessage}")
         }
       })
       newImages

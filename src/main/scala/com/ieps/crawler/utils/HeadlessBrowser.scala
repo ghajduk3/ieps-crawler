@@ -98,7 +98,7 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
 
   def getUrlContent(url: String): Option[String] = {
     try {
-      logger.info(s"getting $url")
+      //logger.info(s"getting $url")
       val response: Page = webClient.getPage(url)
       val webResponse: WebResponse = response.getWebResponse
       Some(webResponse.getContentAsString())
@@ -120,13 +120,13 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
       val contentType = Some(webResponse.getContentType)
       val contentData = Some(toByteArray(webResponse.getContentAsStream))
       val httpCode = webResponse.getStatusCode
-      logger.info(s"httpcode for $url: $httpCode")
+      //logger.info(s"httpcode for $url: $httpCode")
       if (200 <= httpCode  && httpCode < 400) {
         Some((contentType, contentData))
       } else None
     } catch {
       case _: Exception =>
-        logger.info(s"Failed obtaining data for $url")
+        //logger.info(s"Failed obtaining data for $url")
         None
     }
   }

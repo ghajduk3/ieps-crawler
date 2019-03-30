@@ -37,7 +37,7 @@ class PageQueue(
 
   override def close(): Unit = {
     if (!isEmpty) {
-      logger.warn("Queue is not empty on close.")
+      logger.warn(s"$queueName: Queue is not empty on close.")
     } else {
       queue.removeAll()
     }
@@ -46,29 +46,31 @@ class PageQueue(
 
   def addIfNotInQueue(pageRow: PageRow): Boolean = {
     if (pageRow.url.isDefined) {
-      !uniqueElements.add(pageRow.url.get)
+      uniqueElements.add(pageRow.url.get)
     } else {
       // we do not need undefined
-      logger.warn(s"Url undefined? $pageRow")
+      logger.warn(s"$queueName: Url undefined? $pageRow")
       false
     }
   }
 
   override def enqueue(item: QueuePageEntry): Unit = {
-    queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
-    uncommittedChanges += 1
-    commitIfNecessary()
+    if(addIfNotInQueue(item.pageInQueue)) {
+      queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
+      uncommittedChanges += 1
+      commitIfNecessary()
+    }
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
 //    items.filter(element => addIfNotInQueue(element.pageInQueue)).foreach(enqueue)
     items.foreach(enqueue)
-    logger.info(s"Queue size: ${size()}")
+    //logger.info(s"$queueName: Queue size: ${size()}")
   }
 
   override def dequeue(): Option[QueuePageEntry] = try {
     if (queue.isEmpty) {
-      queue.removeAll()
+      queue.gc()
       None
     } else {
       val item = new String(queue.dequeue(), StandardCharsets.UTF_8)
@@ -82,7 +84,7 @@ class PageQueue(
     }
   } catch {
     case e: IOException =>
-      logger.error(s"IOException (removeAll): ${e.getMessage}") // if removeAll cannot delete any files will throw IOException
+      logger.error(s"$queueName: IOException (removeAll): ${e.getMessage}") // if removeAll cannot delete any files will throw IOException
       None
     case e: Exception =>
 //      logger.error(s"Unknown Exception: ${e.getMessage}")
@@ -95,6 +97,7 @@ class PageQueue(
       queue.flush()
       queue.gc()
       uncommittedChanges = 0
+      logger.info(s"Worker_$queueName set size is ${uniqueElements.size}")
     }
   }
 

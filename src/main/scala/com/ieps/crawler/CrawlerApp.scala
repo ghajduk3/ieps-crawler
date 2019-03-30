@@ -31,7 +31,7 @@ object CrawlerApp extends App with StrictLogging {
 //  )
   val frontierManager: ActorRef = actorSystem.actorOf(FrontierManagerActor.props(dbConnection, pageQueue).withDispatcher("thread-pool-dispatcher"))
   frontierManager ! InitializeFrontier(List(
-    "http://www.e-prostor.gov.si/",
+    "http://www.evem.gov.si/",
     "http://www.e-prostor.gov.si/"
   ))
 //  val crawlerWorker2: ActorRef = actorSystem.actorOf(PageWorkerActor.props("2", dbConnection, pageQueue, dataQueue).withDispatcher("thread-pool-dispatcher"))

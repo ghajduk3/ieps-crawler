@@ -83,7 +83,7 @@ class PageWorkerActor(
                               extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
                               // enqueue the images
                               extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
-                            } else logger.warn(s"Got status code $httpStatusCode")
+                            } //else logger.warn(s"Got status code $httpStatusCode")
                           }
                         case Failure(exception) => exception match {
                           case FailedAttempt(message, cause, failedPage: PageRow) =>
@@ -91,7 +91,7 @@ class PageWorkerActor(
                               dbService.insertIfNotExists(failedPage.copy(siteId = Some(site.id)))
                             }
                         }
-                          logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
+                          //logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
                       }
                       val delay = robots.getDelay + ((2 + rand.nextInt(20)) seconds).toMillis // adding jitter to be more crawl-friendly
                       logger.info(s"$logInstanceIdentifier Waiting for ${delay / 1000L}s")
@@ -144,6 +144,8 @@ class PageWorkerActor(
                 site = site.copy(sitemapContent = Some(content))
                 val siteMapUrls = duplicate.deduplicatePages(SiteMaps.getSiteMapUrls(url, site)).map(page => QueuePageEntry(page))
                 pageQueue.enqueueAll(siteMapUrls)
+              case _ =>
+                logger.info(s"$logInstanceIdentifier something is wrong?")
             }
           }))
         })

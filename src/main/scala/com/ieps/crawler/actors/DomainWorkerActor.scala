@@ -2,36 +2,37 @@ package com.ieps.crawler.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
-import com.ieps.crawler.db
-import com.ieps.crawler.db.{DBService, Tables}
 import com.ieps.crawler.db.Tables.{PageRow, SiteRow}
-import com.ieps.crawler.queue.{DataQueue, PageQueue}
-import com.ieps.crawler.queue.Queue.{QueueDataEntry, QueuePageEntry}
+import com.ieps.crawler.db.{DBService, Tables}
+import com.ieps.crawler.queue.PageQueue
+import com.ieps.crawler.queue.Queue.QueuePageEntry
 import com.ieps.crawler.utils.HeadlessBrowser.FailedAttempt
 import com.ieps.crawler.utils._
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.{DateTime, DateTimeZone}
 import slick.jdbc.PostgresProfile.api.Database
 
-import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 
 object DomainWorkerActor {
 
-  def props(workerId: String, db: Database, pageQueue: PageQueue) = Props(new DomainWorkerActor(workerId, db, pageQueue))
+  def props(workerId: String, db: Database) = Props(new DomainWorkerActor(workerId, db))
 
   // to be received from the FrontierManager
   case class ProcessDomain(siteRow: SiteRow, initialUrls: List[QueuePageEntry]) // !! has to be previously persisted to disk
   case class AddLinksToLocalQueue(links: List[QueuePageEntry])
   case object ProcessNextPage // self-sending the next message
+  case object StatusReport
+  case object StatusRequest
+  case class StatusResponse(currentSite: Option[SiteRow], isWaiting: Boolean, queueSize: Long)
 }
 
 class DomainWorkerActor(
     val workerId: String,
-    val db: Database,
-    val queue: PageQueue
+    val db: Database
   ) extends Actor
     with StrictLogging {
   import DomainWorkerActor._
@@ -40,10 +41,14 @@ class DomainWorkerActor(
   private implicit val executionContext: ExecutionContext = context.system.dispatchers.lookup("thread-pool-dispatcher")
   private implicit val timeout: FiniteDuration = 30 seconds
   private implicit val delay: FiniteDuration = 4 seconds
-  private val logInstanceIdentifier = s"Worker_$workerId:"
+  private var logInstanceIdentifier: String = s"Worker_$workerId:"
+  private var isWaiting: Boolean = false
   private val dbService = new DBService(db)
   private val duplicate = new DuplicateLinks(db)
   private val browser = new HeadlessBrowser()
+  private val queue: PageQueue = new PageQueue("queue/", workerId, true)
+
+  context.system.scheduler.schedule(15 seconds, 10 seconds, self, StatusReport)
 
 
   // mutable state, keep as simple as possible
@@ -51,14 +56,38 @@ class DomainWorkerActor(
 
   override def receive: Receive = LoggingReceive {
     case ProcessDomain(site, initialUrls) =>
+      logger.info(s"$logInstanceIdentifier got a new domain: ${site.domain.get}")
+      logInstanceIdentifier = s"Worker_$workerId (${site.domain.get}):"
       currentSite = Some(new SiteRobotsTxt(site))
-
-      queue.enqueue(QueuePageEntry(PageRow(
+      queue.enqueueAll(List(QueuePageEntry(PageRow(
         id = -1,
         siteId = Some(site.id),
         url = Some(Canonical.getCanonical(site.domain.get))
-      )))
+      ))) ++ initialUrls)
       self ! ProcessNextPage
+
+    case StatusRequest =>
+      val site = currentSite.map(_.site)
+      sender ! StatusResponse(site, isWaiting, queue.size())
+
+    case StatusReport =>
+      currentSite.map(_.site) match {
+        case Some(site) =>
+          logger.info(s"$logInstanceIdentifier Status report: domain: ${site.domain.get}, waiting: $isWaiting, queue size: ${queue.size()}")
+          if (queue.isEmpty) {
+            logger.info(s"Requesting new domain")
+            context.parent ! NewDomainRequest(site)
+          }
+        case None =>
+          logger.info(s"$logInstanceIdentifier Status report: domain: none, waiting: $isWaiting, queue size: ${queue.size()}")
+          context.parent ! NewDomainRequest
+      }
+
+
+    case AddLinksToLocalQueue(links) =>
+//      logger.info(s"$logInstanceIdentifier Adding links to local queue: ${links.size}")
+      queue.enqueueAll(links)
+      if(!isWaiting) self ! ProcessNextPage
 
     case  ProcessNextPage =>
       // TODO:
@@ -68,9 +97,10 @@ class DomainWorkerActor(
       //  - extract links, images, data
       //  - persist current page to db
       //  - link to previous if defined
+        isWaiting = false
         if (!queue.hasMorePages) {
-          currentSite = None
-          context.parent ! NewDomainRequest
+          logger.info(s"$logInstanceIdentifier queue is empty.")
+//          self ! StatusReport
         } else {
           queue.dequeue().map(processPage).foreach {
             case List() =>
@@ -90,6 +120,8 @@ class DomainWorkerActor(
       // handle original pages
       val masterQueueEntries = handleAllowed(queueEntry)
       context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
+      isWaiting = true
+//      logger.info(s"$logInstanceIdentifier Non-domain links: ${masterQueueEntries.size}")
       return masterQueueEntries
     }
     self ! ProcessNextPage
@@ -118,6 +150,7 @@ class DomainWorkerActor(
 
   def handleAllowed(queuePageEntry: QueuePageEntry): List[QueuePageEntry] = {
     val queuedPage = queuePageEntry.pageInQueue.copy(siteId = Some(currentSite.get.site.id))
+    logger.info(s"$logInstanceIdentifier working on ${queuedPage.url.get}")
     Await.ready(browser.getPageSource(queuedPage), timeout).value.get match {
       case Success(pageWithContent: PageRow) =>
         val insertedPage = storeAndLinkPage(pageWithContent, queuePageEntry)
@@ -142,11 +175,11 @@ class DomainWorkerActor(
             case None => List.empty
           }
         } else {
-          logger.warn(s"$logInstanceIdentifier Got status code $httpStatusCode")
+//          logger.warn(s"$logInstanceIdentifier Got status code $httpStatusCode")
           List.empty
         }
       case Failure(exception: FailedAttempt) =>
-        logger.error(s"$logInstanceIdentifier Failed getting content: ${exception.getMessage}")
+//        logger.error(s"$logInstanceIdentifier Failed getting content: ${exception.getMessage}")
         storeAndLinkPage(exception.pageRow, queuePageEntry)
         List.empty
       case Failure(exception) =>
