@@ -85,9 +85,7 @@ class DomainWorkerActor(
 
 
     case AddLinksToLocalQueue(links) =>
-//      logger.info(s"$logInstanceIdentifier Adding links to local queue: ${links.size}")
       queue.enqueueAll(links)
-      if(!isWaiting) self ! ProcessNextPage
 
     case  ProcessNextPage =>
       // TODO:
@@ -97,7 +95,6 @@ class DomainWorkerActor(
       //  - extract links, images, data
       //  - persist current page to db
       //  - link to previous if defined
-        isWaiting = false
         if (!queue.hasMorePages) {
           logger.info(s"$logInstanceIdentifier queue is empty.")
 //          self ! StatusReport
@@ -116,8 +113,11 @@ class DomainWorkerActor(
     } else if (duplicate.isDuplicatePage(queueEntry.pageInQueue)) {
       // handle duplicate pages
       handleDuplicate(queueEntry)
+    } else if (isWaiting) {
+      return List.empty
     } else {
       // handle original pages
+      isWaiting = false
       val masterQueueEntries = handleAllowed(queueEntry)
       context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
       isWaiting = true
@@ -129,7 +129,7 @@ class DomainWorkerActor(
   }
 
   def handleDisallowed(queuePageEntry: QueuePageEntry): Unit = {
-    logger.warn(s"$logInstanceIdentifier Page disallowed: ${queuePageEntry.pageInQueue.url.get}")
+    logger.debug(s"$logInstanceIdentifier Page disallowed: ${queuePageEntry.pageInQueue.url.get}")
     storeAndLinkPage(
       queuePageEntry.pageInQueue.copy(
         siteId = Some(currentSite.get.site.id),
@@ -141,7 +141,7 @@ class DomainWorkerActor(
   }
 
   def handleDuplicate(queuePageEntry: QueuePageEntry): Unit = {
-    logger.warn(s"$logInstanceIdentifier Page is duplicate: ${queuePageEntry.pageInQueue.url.get}")
+    logger.debug(s"$logInstanceIdentifier Page is duplicate: ${queuePageEntry.pageInQueue.url.get}")
     storeAndLinkPage(
       queuePageEntry.pageInQueue,
       queuePageEntry
@@ -171,7 +171,8 @@ class DomainWorkerActor(
           extractor.getImages//.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
 
           filterNonDomainPages(allLinks) match {
-            case Some(links) => links.map(QueuePageEntry(_, Some(insertedPage.copy(htmlContent = None))))
+            case Some(links) =>
+              duplicate.deduplicatePages(links).map(QueuePageEntry(_, Some(insertedPage.copy(htmlContent = None))))
             case None => List.empty
           }
         } else {

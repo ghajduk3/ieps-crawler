@@ -55,11 +55,11 @@ class PageQueue(
   }
 
   override def enqueue(item: QueuePageEntry): Unit = {
-    if(addIfNotInQueue(item.pageInQueue)) {
-      queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
-      uncommittedChanges += 1
-      commitIfNecessary()
-    }
+//    if(addIfNotInQueue(item.pageInQueue)) {
+    queue.enqueue(item.asJson.toString().getBytes(StandardCharsets.UTF_8))
+    uncommittedChanges += 1
+    commitIfNecessary()
+//    }
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
