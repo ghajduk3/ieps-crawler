@@ -1,6 +1,6 @@
 package com.ieps.crawler.actors
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, PoisonPill, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
 import com.ieps.crawler.db.{DBService, Tables}
@@ -22,7 +22,7 @@ object DomainWorkerActor {
   def props(workerId: String, db: Database) = Props(new DomainWorkerActor(workerId, db))
 
   // to be received from the FrontierManager
-  case class ProcessDomain(siteRow: SiteRow, initialUrls: List[QueuePageEntry]) // !! has to be previously persisted to disk
+  case class ProcessDomain(siteRow: SiteRow, initialUrls: List[QueuePageEntry], download: Boolean = false) // !! has to be previously persisted to disk
   case class AddLinksToLocalQueue(links: List[QueuePageEntry])
   case object ProcessNextPage // self-sending the next message
   case object StatusReport
@@ -43,6 +43,7 @@ class DomainWorkerActor(
   private implicit val delay: FiniteDuration = 4 seconds
   private var logInstanceIdentifier: String = s"Worker_$workerId:"
   private var isWaiting: Boolean = false
+  private var downloadData: Boolean = false
   private val dbService = new DBService(db)
   private val duplicate = new DuplicateLinks(db)
   private val browser = new HeadlessBrowser()
@@ -55,7 +56,11 @@ class DomainWorkerActor(
   private var currentSite: Option[SiteRobotsTxt]= None
 
   override def receive: Receive = LoggingReceive {
-    case ProcessDomain(site, initialUrls) =>
+    case PoisonPill =>
+      queue.close()
+      context.stop(self)
+
+    case ProcessDomain(site, initialUrls, download) =>
       logger.info(s"$logInstanceIdentifier got a new domain: ${site.domain.get}")
       logInstanceIdentifier = s"Worker_$workerId (${site.domain.get}):"
       currentSite = Some(new SiteRobotsTxt(site))
@@ -65,6 +70,7 @@ class DomainWorkerActor(
         url = Canonical.getCanonical(site.domain.get),
         storedTime = Some(DateTime.now(DateTimeZone.UTC))
       ))) ++ initialUrls)
+      downloadData = download
       self ! ProcessNextPage
 
     case StatusRequest =>
@@ -74,13 +80,13 @@ class DomainWorkerActor(
     case StatusReport =>
       currentSite.map(_.site) match {
         case Some(site) =>
-          logger.info(s"$logInstanceIdentifier Status report: domain: ${site.domain.get}, waiting: $isWaiting, queue size: ${queue.size()}")
+          logger.info(s"$logInstanceIdentifier Status report: domain: ${site.domain.get}, waiting: $isWaiting, download: $downloadData, queue size: ${queue.size()}")
           if (queue.isEmpty) {
             logger.info(s"Requesting new domain")
             context.parent ! NewDomainRequest(site)
           }
         case None =>
-          logger.info(s"$logInstanceIdentifier Status report: domain: none, waiting: $isWaiting, queue size: ${queue.size()}")
+          logger.info(s"$logInstanceIdentifier Status report: domain: none, waiting: $isWaiting, download: $downloadData, queue size: ${queue.size()}")
           context.parent ! NewDomainRequest
       }
 
@@ -108,23 +114,32 @@ class DomainWorkerActor(
       return List.empty
     } else {
       // handle original pages
-      var masterQueueEntries = List.empty[QueuePageEntry]
       queueEntry.dataType match {
         case 0 => // html
           if (duplicate.isDuplicatePage(queueEntry.pageInQueue)) {
             // handle duplicate pages
             handleDuplicate(queueEntry)
           } else {
-            masterQueueEntries = handleAllowed(queueEntry)
+            val masterQueueEntries = handleAllowed(queueEntry)
+            context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
+            isWaiting = true
+            return masterQueueEntries
           }
         case 1 => // images
           handleImage(queueEntry)
+          if (downloadData) {
+            context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
+            isWaiting = true
+            return List.empty
+          }
         case 2 => // data
           handlePageData(queueEntry)
+          if (downloadData) {
+            context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
+            isWaiting = true
+            return List.empty
+          }
       }
-      context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
-      isWaiting = true
-      return masterQueueEntries
     }
     self ! ProcessNextPage
     List.empty
@@ -205,13 +220,18 @@ class DomainWorkerActor(
       val imageRow = ImageRow(
         id = -1,
         pageId = Some(referencePage.id),
-        filename = queuedImage.url,
-        contentType = queuedImage.pageTypeCode
+        filename = queuedImage.url
       )
       if (!dbService.imageExists(imageRow)) {
-        browser.getImageData(imageRow).map(imageWithData => {
-          dbService.insertImageIfNotExists(imageWithData)
-        })
+        if(downloadData) {
+          browser.getImageData(imageRow).map(imageWithData => {
+            dbService.insertImageIfNotExists(imageWithData)
+          })
+        } else {
+          dbService.insertImageIfNotExists(imageRow)
+        }
+      } else {
+        dbService.insertImageIfNotExists(imageRow)
       }
     })
   }
@@ -223,13 +243,18 @@ class DomainWorkerActor(
       val pageDataRow = PageDataRow(
         id = -1,
         pageId = Some(referencePage.id),
-        filename = queuedPageData.url,
-        dataTypeCode = queuedPageData.pageTypeCode
+        filename = queuedPageData.url
       )
       if (!dbService.pageDataExists(pageDataRow)) {
-        browser.getPageData(pageDataRow).map(pageData => {
-          dbService.insertPageDataIfNotExists(pageData)
-        })
+        if (downloadData) {
+          browser.getPageData(pageDataRow).map(pageData => {
+            dbService.insertPageDataIfNotExists(pageData)
+          })
+        } else {
+          dbService.insertPageDataIfNotExists(pageDataRow)
+        }
+      } else {
+        dbService.insertPageDataIfNotExists(pageDataRow)
       }
     })
   }

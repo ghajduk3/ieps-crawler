@@ -1,10 +1,9 @@
 package com.ieps.crawler
 
 import akka.actor.CoordinatedShutdown.JvmExitReason
-import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown, Kill}
+import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown, Kill, PoisonPill}
 import com.ieps.crawler.actors.FrontierManagerActor
 import com.ieps.crawler.actors.FrontierManagerActor.InitializeFrontier
-import com.ieps.crawler.queue.{DataQueue, PageQueue}
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.{DateTime, DateTimeZone, Minutes}
 import slick.jdbc.PostgresProfile.api.Database
@@ -26,15 +25,20 @@ object CrawlerApp extends App with StrictLogging {
   )
   frontierManager ! InitializeFrontier(List(
     "http://www.evem.gov.si/",
+    "https://e-uprava.gov.si/",
+    "https://podatki.gov.si/",
     "http://www.e-prostor.gov.si/",
-//    "https://podatki.gov.si/",
-//    "http://www.e-prostor.gov.si/"
+    "http://www.evode.gov.si/",
+    "http://www.fu.gov.si/",
+    "http://www.mo.gov.si/",
+    "http://www.arso.gov.si/",
+    "http://www.mirs.gov.si/"
   ))
 
   Signal.handle(new Signal("INT"), new SignalHandler() {
     def handle(sig: Signal) {
       logger.info(s"Shutting down. Time spent working: ${Minutes.minutesBetween(timeStart, DateTime.now(DateTimeZone.UTC)).getMinutes} minutes")
-      frontierManager ! Kill
+      frontierManager ! PoisonPill
       dbConnection.close()
       Await.result(CoordinatedShutdown(actorSystem).run(JvmExitReason), 30 seconds)
     }

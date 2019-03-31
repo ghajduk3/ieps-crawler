@@ -1,6 +1,6 @@
 package com.ieps.crawler.actors
 
-import akka.actor.{Actor, ActorRef, Kill, Props}
+import akka.actor.{Actor, ActorRef, Kill, PoisonPill, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.DBService
 import com.ieps.crawler.db.Tables.SiteRow
@@ -42,12 +42,14 @@ class FrontierManagerActor(
   private val sitesQueue: MutableMap[String, (SiteRow, List[QueuePageEntry])] = MutableMap.empty
   private val domainWorkers: MutableMap[String, Option[ActorRef]] = MutableMap.empty
   private val workers: mutable.MutableList[ActorRef] = mutable.MutableList.empty
+  private var seedUrls: List[String] = List.empty
 
   override def receive: Receive = LoggingReceive {
-    case Kill =>
+    case PoisonPill =>
       context.stop(self)
 
     case InitializeFrontier(initialUrls) =>
+      seedUrls = initialUrls
       initialUrls.foreach(url => {
         logger.info(s"Initializing $url")
         val domain = Canonical.extractDomain(url)
@@ -68,16 +70,16 @@ class FrontierManagerActor(
         }
 
         currentWorker.foreach(worker => {
-          worker ! ProcessDomain(site, urls)
+          worker ! ProcessDomain(site, urls, download = true)
         })
       })
 
     case AddLinksToFrontier(links) =>
       links
         .filter(_.pageInQueue.url.isDefined)
-        .filter(queueElement => {
-          !limitSites || sitesQueue.keys.toSet.contains(Canonical.extractDomain(queueElement.pageInQueue.url.get))
-        })
+//        .filter(queueElement => {
+//          !limitSites || sitesQueue.keys.toList.exists(_.contains(Canonical.extractDomain(queueElement.pageInQueue.url.get)))
+//        })
         .groupBy(link => inferSite(link.pageInQueue.url.get)._1).foreach {
         case (site, list) =>
           domainWorkers.get(site.domain.get) match {
@@ -90,7 +92,8 @@ class FrontierManagerActor(
               sitesQueue(site.domain.get) = (site, list)
               spawnNewWorker(site.domain.get) match {
                 case Some(worker) =>
-                  worker ! ProcessDomain(site, list)
+                  val download = seedUrls.exists(_.contains(site.domain.get))
+                  worker ! ProcessDomain(site, list, download)
                 case None =>
               }
           }
@@ -108,7 +111,8 @@ class FrontierManagerActor(
                     domainWorkers(newDomain) = Some(sender())
                     domainWorkers(currentDomain) = None
                     sitesQueue(newDomain) = (site, List.empty)
-                    sender() ! ProcessDomain(site, urls)
+                    val download = seedUrls.exists(_.contains(site.domain.get))
+                    sender() ! ProcessDomain(site, urls, download)
                   case _ =>
                     logger.warn("[new domain] No free domains currently.")
                 }

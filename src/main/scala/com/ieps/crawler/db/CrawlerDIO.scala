@@ -158,7 +158,7 @@ object CrawlerDIO {
   def insertImages(images: Seq[ImageRow]): DBIO[Seq[ImageRow]] = Query.writeImage ++= images
   def insertIfNotExists(image: ImageRow): DBIO[ImageRow] =
     Image.filter(p => p.filename === image.filename).result.headOption.flatMap {
-      case Some(foundImage) => DBIO.successful(foundImage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case Some(foundImage) => insertImage(foundImage.copy(id = -1, pageId = foundImage.pageId)) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
       case None => insertImage(image)
     }.transactionally
 
@@ -170,7 +170,7 @@ object CrawlerDIO {
 
   def insertIfNotExists(pageData: PageDataRow): DBIO[PageDataRow] =
     PageData.filter(p => p.filename === pageData.filename).result.headOption.flatMap {
-      case Some(foundImage) => DBIO.successful(foundImage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case Some(foundPageData) => insertPageData(foundPageData.copy(id = -1, pageId = pageData.pageId)) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
       case None => insertPageData(pageData)
     }.transactionally
 

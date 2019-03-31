@@ -117,6 +117,3 @@ values ('HTML'),
        ('FRONTIER'),
        ('INVALID'),
        ('DISALLOWED');
-
--- insert into crawldb.site
--- values (1, 'site1', 'robots', 'sitemap');

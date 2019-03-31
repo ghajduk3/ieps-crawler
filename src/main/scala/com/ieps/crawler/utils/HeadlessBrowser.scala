@@ -30,6 +30,14 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
   webClient.getOptions.setTimeout(5000) // 5 s timeout
   webClient.getOptions.setUseInsecureSSL(true)
 
+  val mimeTypes: Map[String, String] = Map[String, String](
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "DOCX",
+    "application/msword" -> "DOC",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "PPT",
+    "application/vnd.ms-powerpoint" -> "PPT",
+    "application/pdf" -> "PDF"
+  )
+
   /**
     * Gets a web page with a given `url`
     *
@@ -143,7 +151,7 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
       getData(pageDataRow.filename.get) match {
         case Some((contentType, contentData)) =>
           Some(pageDataRow.copy(
-            dataTypeCode = contentType,
+            dataTypeCode = mimeTypes.get(contentType.getOrElse("")),
             data = contentData
           ))
         case _ => None
