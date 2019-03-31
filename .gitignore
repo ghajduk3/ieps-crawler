@@ -11,3 +11,5 @@ config/spark-defaults.conf
 .settings/
 .DS_STORE*
 queue/*
+db_dumps/*
+
