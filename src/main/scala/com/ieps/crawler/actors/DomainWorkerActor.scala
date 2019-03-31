@@ -2,7 +2,7 @@ package com.ieps.crawler.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
-import com.ieps.crawler.db.Tables.{PageRow, SiteRow}
+import com.ieps.crawler.db.Tables.{ImageRow, PageDataRow, PageRow, SiteRow}
 import com.ieps.crawler.db.{DBService, Tables}
 import com.ieps.crawler.queue.PageQueue
 import com.ieps.crawler.queue.Queue.QueuePageEntry
@@ -104,17 +104,26 @@ class DomainWorkerActor(
     if (!currentSite.get.isAllowed(queueEntry.pageInQueue)) {
       // handle disallowed pages
       handleDisallowed(queueEntry)
-    } else if (duplicate.isDuplicatePage(queueEntry.pageInQueue)) {
-      // handle duplicate pages
-      handleDuplicate(queueEntry)
     } else if (isWaiting) {
       return List.empty
     } else {
       // handle original pages
-      val masterQueueEntries = handleAllowed(queueEntry)
+      var masterQueueEntries = List.empty[QueuePageEntry]
+      queueEntry.dataType match {
+        case 0 => // html
+          if (duplicate.isDuplicatePage(queueEntry.pageInQueue)) {
+            // handle duplicate pages
+            handleDuplicate(queueEntry)
+          } else {
+            masterQueueEntries = handleAllowed(queueEntry)
+          }
+        case 1 => // images
+          handleImage(queueEntry)
+        case 2 => // data
+          handlePageData(queueEntry)
+      }
       context.system.scheduler.scheduleOnce(currentSite.get.getDelay millis, self, ProcessNextPage)
       isWaiting = true
-//      logger.info(s"$logInstanceIdentifier Non-domain links: ${masterQueueEntries.size}")
       return masterQueueEntries
     }
     self ! ProcessNextPage
@@ -150,28 +159,25 @@ class DomainWorkerActor(
         val httpStatusCode = insertedPage.httpStatusCode.get
         if (200 <= httpStatusCode && httpStatusCode < 400) {
           val extractor = new ExtractFromHTML(insertedPage, currentSite.get.site)
+          // enqueue the page data
+          extractor.getPageData.foreach( links => {
+            val domainLinks = filterDomainPages(Some(links)).get
+            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 2, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
+          })
+
+          // enqueue the images
+          extractor.getImages.foreach( links => {
+            val domainLinks = filterDomainPages(Some(links)).get
+            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 1, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
+          })
+
           // enqueue the extracted links
-          val allLinks: Option[List[PageRow]] = extractor.getPageLinks//
+          val allLinks: Option[List[PageRow]] = extractor.getPageLinks
           allLinks.foreach( links => {
             dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
             val domainLinks = filterDomainPages(Some(links)).get
             duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 0, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
           })
-          // TODO: handle page data and images in a similar manner to the links
-          // enqueue the page data
-          /*extractor.getPageData.foreach( links => {
-            dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
-            val domainLinks = filterDomainPages(Some(links)).get
-            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 2, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
-          })
-          //.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
-          // enqueue the images
-          extractor.getImages.foreach( links => {
-//            dbService.linkPages(insertedPage, duplicate.duplicatePages(links))
-            val domainLinks = filterDomainPages(Some(links)).get
-            duplicate.deduplicatePages(domainLinks).map(link => QueuePageEntry(link, 1, Some(insertedPage.copy(htmlContent = None)))).foreach(queue.enqueue)
-          })*/
-          //.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
 
           filterNonDomainPages(allLinks) match {
             case Some(links) =>
@@ -190,6 +196,42 @@ class DomainWorkerActor(
         logger.error(s"$logInstanceIdentifier Unknown error: ${exception.getMessage}")
         List.empty
     }
+  }
+
+  def handleImage(entry: QueuePageEntry): Unit = {
+    val queuedImage = entry.pageInQueue
+    entry.referencePage.foreach(referencePage => {
+      logger.info(s"$logInstanceIdentifier [image] working on ${queuedImage.url.get}")
+      val imageRow = ImageRow(
+        id = -1,
+        pageId = Some(referencePage.id),
+        filename = queuedImage.url,
+        contentType = queuedImage.pageTypeCode
+      )
+      if (!dbService.imageExists(imageRow)) {
+        browser.getImageData(imageRow).map(imageWithData => {
+          dbService.insertImageIfNotExists(imageWithData)
+        })
+      }
+    })
+  }
+
+  def handlePageData(entry: QueuePageEntry): Unit = {
+    val queuedPageData = entry.pageInQueue
+    entry.referencePage.foreach(referencePage => {
+      logger.info(s"$logInstanceIdentifier [page data] working on ${queuedPageData.url.get}")
+      val pageDataRow = PageDataRow(
+        id = -1,
+        pageId = Some(referencePage.id),
+        filename = queuedPageData.url,
+        dataTypeCode = queuedPageData.pageTypeCode
+      )
+      if (!dbService.pageDataExists(pageDataRow)) {
+        browser.getPageData(pageDataRow).map(pageData => {
+          dbService.insertPageDataIfNotExists(pageData)
+        })
+      }
+    })
   }
 
   def storeAndLinkPage(pageRow: PageRow, queuePageEntry: QueuePageEntry): PageRow = {

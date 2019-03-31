@@ -171,4 +171,30 @@ class DBService(db: Database) {
 
   def getPageContent(page: PageRow): (Seq[ImageRow], Seq[PageDataRow]) =
     Await.result(getPageContentFuture(page.id), timeout)
+
+  def insertImageIfNotExistsFuture(imageRow: ImageRow): Future[ImageRow] =
+    db.run(CrawlerDIO.insertImage(imageRow))
+
+  def insertImageIfNotExists(imageRow: ImageRow): ImageRow =
+    Await.result(insertImageIfNotExistsFuture(imageRow), timeout)
+
+  def insertPageDataIfNotExistsFuture(pageDataRow: PageDataRow): Future[PageDataRow] =
+    db.run(CrawlerDIO.insertPageData(pageDataRow))
+
+  def insertPageDataIfNotExists(pageDataRow: PageDataRow): PageDataRow =
+    Await.result(insertPageDataIfNotExistsFuture(pageDataRow), timeout)
+
+  def imageExistsFuture(imageRow: ImageRow): Future[Boolean] =
+    db.run(CrawlerDIO.imageExists(imageRow))
+
+  def imageExists(imageRow: ImageRow): Boolean =
+    Await.result(imageExistsFuture(imageRow), timeout)
+
+
+  def pageDataExistsFuture(pageDataRow: PageDataRow): Future[Boolean] =
+    db.run(CrawlerDIO.pageDataExists(pageDataRow))
+
+  def pageDataExists(pageDataRow: PageDataRow): Boolean =
+    Await.result(pageDataExistsFuture(pageDataRow), timeout)
+
 }

@@ -21,15 +21,14 @@ object CrawlerApp extends App with StrictLogging {
   val dbConnection = Database.forConfig("local")
   val timeStart = DateTime.now(DateTimeZone.UTC)
 
-  val pageQueue = new PageQueue("./queue")
-  val domainQueue = new PageQueue("./queue", "worker_1")
-  val dataQueue = new DataQueue("./queue")
-  val frontierManager: ActorRef = actorSystem.actorOf(FrontierManagerActor.props(dbConnection).withDispatcher("thread-pool-dispatcher"))
+  val frontierManager: ActorRef = actorSystem.actorOf(
+    FrontierManagerActor.props(dbConnection).withDispatcher("thread-pool-dispatcher")
+  )
   frontierManager ! InitializeFrontier(List(
     "http://www.evem.gov.si/",
     "http://www.e-prostor.gov.si/",
-    "https://podatki.gov.si/",
-    "http://www.e-prostor.gov.si/"
+//    "https://podatki.gov.si/",
+//    "http://www.e-prostor.gov.si/"
   ))
 
   Signal.handle(new Signal("INT"), new SignalHandler() {

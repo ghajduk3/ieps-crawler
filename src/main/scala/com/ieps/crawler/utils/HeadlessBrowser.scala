@@ -138,25 +138,27 @@ class HeadlessBrowser(debug: Boolean = true) extends StrictLogging{
     }
   }
 
-  private def getPageData(pageRow: PageRow): Option[PageDataRow] = {
-    if(pageRow.url.isDefined) {
-      getData(pageRow.url.get) match {
+  def getPageData(pageDataRow: PageDataRow): Option[PageDataRow] = {
+    if(pageDataRow.filename.isDefined) {
+      getData(pageDataRow.filename.get) match {
         case Some((contentType, contentData)) =>
-          Some(PageDataRow(-1, Some(pageRow.id), dataTypeCode = contentType, data = contentData))
+          Some(pageDataRow.copy(
+            dataTypeCode = contentType,
+            data = contentData
+          ))
         case _ => None
       }
     } else None
   }
 
-  def getPageData(pageRows: List[PageRow]): List[PageDataRow] = {
-    pageRows.map(getPageData).filter(_.isDefined).map(_.get)
-  }
-
-  private def getImageData(imageRow: ImageRow): Option[ImageRow] = {
+  def getImageData(imageRow: ImageRow): Option[ImageRow] = {
     if(imageRow.filename.isDefined) {
       getData(imageRow.filename.get) match {
         case Some((contentType, contentData)) =>
-          Some(imageRow.copy(contentType = contentType, data = contentData))
+          Some(imageRow.copy(
+            contentType = contentType,
+            data = contentData
+          ))
         case _ => None
       }
     } else None

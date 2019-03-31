@@ -16,7 +16,8 @@ import scala.collection.JavaConverters._
 
 class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLogging {
 //  logger.info(s"Extracting for: ${pageSource.url}")
-  private val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx", ".zip", ".jpg", "jpeg", ".png")
+  private val nonLinkExtensions = Array(".pdf",".doc",".docx",".ppt",".pptx", ".zip", ".jpg", "jpeg", ".png")
+  private val pageDataExtensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
   private val document: Option[Document] = pageSource.htmlContent.map(htmlContent => Jsoup.parse(htmlContent))
 
@@ -33,6 +34,7 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
             siteId = Some(pageSource.id),
             pageTypeCode = conType(imageLink),
             url = imageLink,
+            storedTime = Some(DateTime.now(DateTimeZone.UTC))
           )
         }
         catch {
@@ -82,11 +84,11 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   }
 
   def getPageLinks: Option[List[PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")).filter(!_.url.get.contains("///")))
+    getAllLinks.map(_.filter(pageRow => !nonLinkExtensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")).filter(!_.url.get.contains("///")))
   }
 
   def getPageData: Option[List[Tables.PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => extensions.exists(e => pageRow.url.get.endsWith(e))))
+    getAllLinks.map(_.filter(pageRow => pageDataExtensions.exists(e => pageRow.url.get.endsWith(e))).map(_.copy(siteId = Some(pageSource.id))))
   }
 
   private def extractLink(url: String): String = {

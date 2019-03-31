@@ -156,8 +156,26 @@ object CrawlerDIO {
   def linkPages(fromPage: PageRow, toPages: Seq[PageRow]): DBIO[List[LinkRow]] = linkPages(fromPage, toPages.toList)
   def insertImage(image: ImageRow): DBIO[ImageRow] = Query.writeImage += image
   def insertImages(images: Seq[ImageRow]): DBIO[Seq[ImageRow]] = Query.writeImage ++= images
+  def insertIfNotExists(image: ImageRow): DBIO[ImageRow] =
+    Image.filter(p => p.filename === image.filename).result.headOption.flatMap {
+      case Some(foundImage) => DBIO.successful(foundImage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case None => insertImage(image)
+    }.transactionally
+
+  def imageExists(imageRow: ImageRow): DBIO[Boolean] =
+    Image.filter(p => p.filename === imageRow.filename).exists.result
+
   def insertPageData(pageData: PageDataRow): DBIO[PageDataRow] = Query.writePageData += pageData
   def insertPageData(pageData: Seq[PageDataRow]): DBIO[Seq[PageDataRow]] = Query.writePageData ++= pageData
+
+  def insertIfNotExists(pageData: PageDataRow): DBIO[PageDataRow] =
+    PageData.filter(p => p.filename === pageData.filename).result.headOption.flatMap {
+      case Some(foundImage) => DBIO.successful(foundImage) //insertPage(page.copy(pageTypeCode = Some("DUPLICATE")))
+      case None => insertPageData(pageData)
+    }.transactionally
+
+  def pageDataExists(pageDataRow: PageDataRow): DBIO[Boolean] =
+    PageData.filter(p => p.filename === pageDataRow.filename).exists.result
 
   // insert site with pages
   def insertSiteWithPage(

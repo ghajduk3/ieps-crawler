@@ -4,18 +4,16 @@ import akka.actor.{Actor, ActorRef, Kill, Props}
 import akka.event.LoggingReceive
 import com.ieps.crawler.db.DBService
 import com.ieps.crawler.db.Tables.SiteRow
-import com.ieps.crawler.queue.PageQueue
 import com.ieps.crawler.queue.Queue.QueuePageEntry
 import com.ieps.crawler.utils._
 import com.typesafe.scalalogging.StrictLogging
 import slick.jdbc.PostgresProfile.api.Database
 
-import scala.collection.{immutable, mutable}
 import scala.collection.mutable.{Map => MutableMap}
+import scala.collection.{immutable, mutable}
 import scala.concurrent.ExecutionContext
 import scala.language.postfixOps
-import scala.util.{Success, Try}
-import scala.util.Random
+import scala.util.{Random, Success, Try}
 
 object FrontierManagerActor {
 
@@ -30,6 +28,7 @@ object FrontierManagerActor {
 
 class FrontierManagerActor(
    val db: Database,
+   val limitSites: Boolean = true,
    val maxWorkers: Int = 16
  ) extends Actor
    with StrictLogging {
@@ -74,7 +73,12 @@ class FrontierManagerActor(
       })
 
     case AddLinksToFrontier(links) =>
-      links.groupBy(link => inferSite(link.pageInQueue.url.get)._1).foreach {
+      links
+        .filter(_.pageInQueue.url.isDefined)
+        .filter(queueElement => {
+          !limitSites || sitesQueue.keys.toSet.contains(Canonical.extractDomain(queueElement.pageInQueue.url.get))
+        })
+        .groupBy(link => inferSite(link.pageInQueue.url.get)._1).foreach {
         case (site, list) =>
           domainWorkers.get(site.domain.get) match {
             case Some(Some(worker)) =>
