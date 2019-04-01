@@ -18,7 +18,7 @@ In order to run the code you need to:
 2. Make sure to have `sbt` [installed](https://www.scala-sbt.org/0.13/docs/Setup.html) on the machine where the code will be running
 3. Make sure that a `queue` directory exists within the working directory of the executable. (If you are running everything from the root directory you should be fine.)
 
-NOTE: The script provided in the repository is required to run the code.
+NOTE: The script provided in the repository is required to run the code because the database models which the code relies upon are generated on compile time.
 
 NOTE: To change the specifics about the database name, username and password, please modify the `local` configuration in [application.conf](./src/main/resources/application.conf).
 

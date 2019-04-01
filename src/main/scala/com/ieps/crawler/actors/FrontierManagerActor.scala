@@ -99,6 +99,21 @@ class FrontierManagerActor(
           }
       }
 
+    case NewDomainRequest =>
+      logger.info(s"New domain request, undefined")
+      getWorkerlessDomain("").foreach {
+        case newDomain =>
+          sitesQueue.get(newDomain) match {
+            case Some((site, urls)) =>
+              domainWorkers(newDomain) = Some(sender())
+              sitesQueue(newDomain) = (site, List.empty)
+              val download = seedUrls.exists(_.contains(site.domain.get))
+              sender() ! ProcessDomain(site, urls, download)
+            case _ =>
+              logger.warn("[new domain] No free domains currently.")
+          }
+      }
+
     case NewDomainRequest(currentSite) =>
       logger.info(s"New domain request, done ${currentSite.domain.get}")
       currentSite.domain.foreach(currentDomain => {
