@@ -35,7 +35,7 @@ object Queue {
       implicitly[DecodeJson[String]].map(FULL_ISO8601_FORMAT.parseDateTime) setName "org.joda.time.DateTime"
   }
 
-  case class QueuePageEntry(pageInQueue: PageRow, referencePage: Option[PageRow] = None)
+  case class QueuePageEntry(pageInQueue: PageRow, dataType: Int = 0, referencePage: Option[PageRow] = None) // 0 = page, 1 = image, 2 = data
 
   case class QueueDataEntry(isData: Boolean, pageId: Int, url: String) // isData: true -> PageDataRow, else -> ImageRow
 

@@ -1,5 +1,7 @@
 package com.ieps.crawler.utils
 
+import java.net.{URI, URL}
+
 import com.ieps.crawler
 import com.ieps.crawler.db
 import com.ieps.crawler.db.Tables
@@ -14,23 +16,30 @@ import scala.collection.JavaConverters._
 
 class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLogging {
 //  logger.info(s"Extracting for: ${pageSource.url}")
-  private val extensions = Array(".pdf",".doc",".docx",".ppt",".pptx", ".zip", ".jpg", "jpeg", ".png")
+  private val nonLinkExtensions = Array(".pdf",".doc",".docx",".ppt",".pptx", ".zip", ".jpg", "jpeg", ".png")
+  private val pageDataExtensions = Array(".pdf",".doc",".docx",".ppt",".pptx")
 
   private val document: Option[Document] = pageSource.htmlContent.map(htmlContent => Jsoup.parse(htmlContent))
 
   //method that gets src from <img> tags
-  def getImages: Option[List[ImageRow]] = {
+  def getImages: Option[List[PageRow]] = {
     document.map( doc => {
       val imgs = doc.select("img[src]").asScala
-      var newImages = List.empty[ImageRow]
+      var newImages = List.empty[PageRow]
       imgs.foreach(img => {
         try {
-          val actualImg = imgLink(img.attr("src"))
-          newImages = newImages :+ ImageRow(-1, Some(pageSource.id), Some(actualImg), Some(conType(actualImg)))
+          val imageLink = imgLink(img.attr("src"))
+          newImages = newImages :+ PageRow(
+            id = -1,
+            siteId = Some(pageSource.id),
+            pageTypeCode = conType(imageLink),
+            url = imageLink,
+            storedTime = Some(DateTime.now(DateTimeZone.UTC))
+          )
         }
         catch {
           case e: Exception =>
-            logger.error(s"Error occurred while extracting image: ${e.getMessage}")
+//            logger.error(s"Error occurred while extracting image: ${e.getMessage}")
         }
       })
       newImages
@@ -75,23 +84,23 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
   }
 
   def getPageLinks: Option[List[PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => !extensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")))
+    getAllLinks.map(_.filter(pageRow => !nonLinkExtensions.exists(e => pageRow.url.get.endsWith(e))).distinct.filter(_.url.get.contains("gov.si")).filter(!_.url.get.contains("///")))
   }
 
   def getPageData: Option[List[Tables.PageRow]] = {
-    getAllLinks.map(_.filter(pageRow => extensions.exists(e => pageRow.url.get.endsWith(e))))
+    getAllLinks.map(_.filter(pageRow => pageDataExtensions.exists(e => pageRow.url.get.endsWith(e))).map(_.copy(siteId = Some(pageSource.id))))
   }
 
   private def extractLink(url: String): String = {
     try {
-      Canonical.getCanonical(url)
+      Canonical.getCanonical(url).get
     } catch {
       case _: Exception =>
-        Canonical.getCanonical(siteSource.domain.get + url)
+        Canonical.getCanonical(siteSource.domain.get + url).get
     }
   }
 
-  private def imgLink(url: String): String = {
+  private def imgLink(url: String): Option[String] = {
     try {
       Canonical.getCanonical(url)
     }
@@ -104,11 +113,10 @@ class ExtractFromHTML(pageSource: PageRow, siteSource: SiteRow) extends StrictLo
         } else {
           siteSource.domain.get + url
         }
-        url1 = Canonical.getCanonical(url1)
-        url1
+        Canonical.getCanonical(url1)
     }
   }
 
-  private def conType(url: String):String = url.slice(url.lastIndexOf(".")+1, url.last)
+  private def conType(url: Option[String]):Option[String] = url.map(url => url.slice(url.lastIndexOf(".") + 1, url.last).toUpperCase())
 
 }

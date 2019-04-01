@@ -10,42 +10,29 @@ import com.ieps.crawler.queue.Queue.{Queue, QueuePageEntry}
 import com.leansoft.bigqueue.BigQueueImpl
 import com.typesafe.scalalogging.LazyLogging
 
-import scala.collection.mutable
-
-class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, clearState: Boolean = false) extends Queue[QueuePageEntry] with LazyLogging {
+class PageQueue(
+  folder: String,
+  queueName: String = "mainQueue",
+  clearState: Boolean = false,
+  bigQueuePageSize: Integer = 32 * 1024 * 1024
+) extends Queue[QueuePageEntry]
+  with LazyLogging {
   import Queue.DateTimeISO8601CodecJsons._
 
   implicit def PageRowCodecJson: CodecJson[PageRow] = casecodec10(PageRow.apply, PageRow.unapply)("id", "siteId", "pageTypeCode", "url", "htmlContent", "hash", "httpStatusCode", "loadTime", "accessedTime", "storedTime")
-  implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec2(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "siteId")
+  implicit def QueuePageEntryCodecJson: CodecJson[QueuePageEntry] = casecodec3(QueuePageEntry.apply, QueuePageEntry.unapply)("id", "dataType", "siteId")
 
-  private val queue: BigQueueImpl = new BigQueueImpl(folder, "pageQueue", bigQueuePageSize) // default page size is 128MB
-  private val uniqueElements: mutable.TreeSet[String] = mutable.TreeSet.empty // keeps only unique elements in the queue
+  private val queue: BigQueueImpl = new BigQueueImpl(folder, queueName, bigQueuePageSize) // default page size is 128MB
 
   if (clearState) {
     queue.removeAll()
-  } else { // initialize the in-memory set of unique elements
-
   }
 
   private var uncommittedChanges = 0
 
   override def close(): Unit = {
-    if (!isEmpty) {
-      logger.warn("Queue is not empty on close.")
-    } else {
-      queue.removeAll()
-    }
+    queue.removeAll()
     queue.close()
-  }
-
-  def addIfNotInQueue(pageRow: PageRow): Boolean = {
-    if (pageRow.url.isDefined) {
-      !uniqueElements.add(pageRow.url.get)
-    } else {
-      // we do not need undefined
-      logger.warn(s"Url undefined? $pageRow")
-      false
-    }
   }
 
   override def enqueue(item: QueuePageEntry): Unit = {
@@ -55,13 +42,12 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
   }
 
   override def enqueueAll(items: List[QueuePageEntry]): Unit = {
-    items.filter(element => addIfNotInQueue(element.pageInQueue)).foreach(enqueue)
-    logger.info(s"Queue size: ${size()}")
+    items.foreach(enqueue)
   }
 
   override def dequeue(): Option[QueuePageEntry] = try {
     if (queue.isEmpty) {
-      queue.removeAll()
+      queue.gc()
       None
     } else {
       val item = new String(queue.dequeue(), StandardCharsets.UTF_8)
@@ -75,11 +61,9 @@ class PageQueue(folder: String, bigQueuePageSize: Integer = 32 * 1024 * 1024, cl
     }
   } catch {
     case e: IOException =>
-      logger.error(s"IOException (removeAll): ${e.getMessage}") // if removeAll cannot delete any files will throw IOException
+      logger.error(s"$queueName: IOException (removeAll): ${e.getMessage}") // if removeAll cannot delete any files will throw IOException
       None
-    case e: Exception =>
-//      logger.error(s"Unknown Exception: ${e.getMessage}")
-//      e.printStackTrace()
+    case _: Exception =>
       None
   }
 

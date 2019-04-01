@@ -48,6 +48,7 @@ create table crawldb.page_data
 (
   id             serial not null,
   page_id        integer,
+  filename       varchar(255),
   data_type_code varchar(20),
   "data"         bytea,
   constraint pk_page_data_id primary key (id)
@@ -116,6 +117,3 @@ values ('HTML'),
        ('FRONTIER'),
        ('INVALID'),
        ('DISALLOWED');
-
--- insert into crawldb.site
--- values (1, 'site1', 'robots', 'sitemap');

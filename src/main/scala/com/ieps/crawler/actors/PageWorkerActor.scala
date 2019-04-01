@@ -23,7 +23,7 @@ object PageWorkerActor {
 
   case object StartWorker
 
-  case object ProcessNextPage
+  case object ProcessPage
 
   case object WorkerStatusRequest
 
@@ -55,7 +55,7 @@ class PageWorkerActor(
 
   override def receive: Receive = LoggingReceive {
 
-    case StartWorker | ProcessNextPage =>
+    case StartWorker | ProcessPage =>
       pageQueue.hasMorePages match {
         case true =>
           val processed = pageQueue.dequeue().map(queueEntry => {
@@ -71,40 +71,40 @@ class PageWorkerActor(
                         case Success(pageWithContent: PageRow) =>
                           logger.info(s"$logInstanceIdentifier Processing: ${queuedPage.url.get}")
                           Utils.retryWithBackoff(logRetry = true) {
-                            val insertedPage: PageRow = dbService.insertIfNotExistsByUrl(pageWithContent.copy(siteId = Some(site.id)))
+                            val insertedPage: PageRow = dbService.insertIfNotExists(pageWithContent.copy(siteId = Some(site.id)))
                             referencePage.foreach(fromPage => dbService.linkPages(fromPage, insertedPage))
                             val httpStatusCode = insertedPage.httpStatusCode.get
 
                             if (200 <= httpStatusCode && httpStatusCode < 400) {
                               val extractor = new ExtractFromHTML(insertedPage, site)
                               // enqueue the extracted links // TODO: add time waited
-                              extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
+                              extractor.getPageLinks.map(duplicate.deduplicatePages(_).map(link => QueuePageEntry(link, 0, Some(insertedPage)))).foreach(pageQueue.enqueueAll)
                               // enqueue the page data
                               extractor.getPageData.map(_.map(data => QueueDataEntry(isData = false, insertedPage.id, data.url.get))).foreach(dataQueue.enqueueAll)
                               // enqueue the images
-                              extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.filename.get))).foreach(dataQueue.enqueueAll)
-                            } else logger.warn(s"Got status code $httpStatusCode")
+                              extractor.getImages.map(_.map(image => QueueDataEntry(isData = true, insertedPage.id, image.url.get))).foreach(dataQueue.enqueueAll)
+                            } //else logger.warn(s"Got status code $httpStatusCode")
                           }
                         case Failure(exception) => exception match {
                           case FailedAttempt(message, cause, failedPage: PageRow) =>
                             Utils.retryWithBackoff(logRetry = true) {
-                              dbService.insertIfNotExistsByUrl(failedPage.copy(siteId = Some(site.id)))
+                              dbService.insertIfNotExists(failedPage.copy(siteId = Some(site.id)))
                             }
                         }
-                          logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
+                          //logger.error(s"$logInstanceIdentifier Error processing ${queuedPage.url.get}: ${exception.getMessage}")
                       }
                       val delay = robots.getDelay + ((2 + rand.nextInt(20)) seconds).toMillis // adding jitter to be more crawl-friendly
                       logger.info(s"$logInstanceIdentifier Waiting for ${delay / 1000L}s")
-                      context.system.scheduler.scheduleOnce(FiniteDuration(delay, MILLISECONDS), self, ProcessNextPage)
+                      context.system.scheduler.scheduleOnce(FiniteDuration(delay, MILLISECONDS), self, ProcessPage)
                     } else {
                       logger.warn(s"$logInstanceIdentifier Duplicate page: ${queuedPage.url.get}")
-                      self ! ProcessNextPage
+                      self ! ProcessPage
                     }
                   }
                   case false =>
-                    dbService.insertIfNotExistsByUrl(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED")))
+                    dbService.insertIfNotExists(queuedPage.copy(siteId = Some(site.id), pageTypeCode = Some("DISALLOWED")))
                     logger.warn(s"$logInstanceIdentifier Site not allowed: ${queuedPage.url.get}")
-                    self ! ProcessNextPage
+                    self ! ProcessPage
                 }
                 true
               })
@@ -112,14 +112,14 @@ class PageWorkerActor(
               case e: Exception =>
                 logger.error(s"$logInstanceIdentifier Failed processing ${queuedPage.url.get}: ${e.getMessage}")
                 e.printStackTrace()
-                self ! ProcessNextPage
+                self ! ProcessPage
             }
             true
           })
-          if (processed.isEmpty) self ! ProcessNextPage
+          if (processed.isEmpty) self ! ProcessPage
         case false =>
           logger.info(s"$logInstanceIdentifier Queue is empty. Retrying in 10s")
-          context.system.scheduler.scheduleOnce(FiniteDuration(10, SECONDS), self, ProcessNextPage)
+          context.system.scheduler.scheduleOnce(FiniteDuration(10, SECONDS), self, ProcessPage)
       }
 
     case any: Any => logger.error(s"$logInstanceIdentifier Unknown message: $any")
@@ -132,24 +132,30 @@ class PageWorkerActor(
         val domain = Some(Canonical.extractDomain(page.url.get))
         logger.info(s"$logInstanceIdentifier domain = $domain")
         var site = SiteRow(-1, domain)
-        browser.getRobotsTxt(Canonical.getCanonical(site.domain.get)).foreach(content => {
-          site = site.copy(robotsContent = Some(content))
-          val robotsTxt = new SiteRobotsTxt(site)
-          if (robotsTxt.getSitemaps.size > 1) {
-            logger.warn(s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
-          }
-          robotsTxt.getSitemaps.foreach(sitemap => sitemap.foreach(url => {
-            Try(browser.getUrlContent(url)) match {
-              case Success(Some(content: String)) =>
-                site = site.copy(sitemapContent = Some(content))
-                val siteMapUrls = duplicate.deduplicatePages(SiteMaps.getSiteMapUrls(url, site)).map(page => QueuePageEntry(page))
-                pageQueue.enqueueAll(siteMapUrls)
+        val canonicalDomain = Canonical.getCanonical(site.domain.get)
+        if(canonicalDomain.isDefined) {
+          browser.getRobotsTxt(canonicalDomain.get).foreach(content => {
+            site = site.copy(robotsContent = Some(content))
+            val robotsTxt = new SiteRobotsTxt(site)
+            if (robotsTxt.getSitemaps.size > 1) {
+              logger.warn(s"$logInstanceIdentifier multiple sitemaps?? ${robotsTxt.getSitemaps}")
             }
-          }))
-        })
+            robotsTxt.getSitemaps.foreach(sitemap => sitemap.foreach(url => {
+              Try(browser.getUrlContent(url)) match {
+                case Success(Some(content: String)) =>
+                  site = site.copy(sitemapContent = Some(content))
+                  val siteMapUrls = duplicate.deduplicatePages(SiteMaps.getSiteMapUrls(url, site)).map(page => QueuePageEntry(page))
+                  pageQueue.enqueueAll(siteMapUrls)
+                case _ =>
+                  logger.info(s"$logInstanceIdentifier something is wrong?")
+              }
+            }))
+          })
+        }
         Utils.retryWithBackoff {
           Some(dbService.insertIfNotExistsByDomain(site))
         }
+
     }
   }
 }
