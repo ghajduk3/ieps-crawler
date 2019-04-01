@@ -33,10 +33,12 @@
 \section{Introduction}
 
 \section{Implementation specifics}
+
 The implementation of the web crawler is done in Scala, which is a functional programming language, offering a lot of syntactical sugars which make the development process easier.
 We chose it in order to improve our programming skills in Scala, and also, learn a lot about its capabilities for concurrent programming.
 
 \subsection{Dependencies}
+
 To make the development process as easy as possible, we are using a number of dependencies. In this report, we are listing the once which are most significant, whilst the list of entire dependencies is available in the \texttt{build.sbt} file. 
 \begin{itemize}
 	\item \texttt{akka-actor} - providing us with the support of multi-threading through the concept of actor systems~\cite{Akka:ActorSystem}.
@@ -48,6 +50,7 @@ To make the development process as easy as possible, we are using a number of de
 \end{itemize}
 
 \subsection{Database modifications}
+
 In order to make the implementation more insightful, we expanded the initial database with additional columns as follows:
 \subsubsection{Table \texttt{page}}
 We introduced the fields:
@@ -70,13 +73,18 @@ We introduced the following column:
 \end{itemize}
 
 \subsubsection{Storing process}
+
 We altered the storing process as well. We omit a page entry of the type \textit{BINARY} which should be a reference to the \textit{image} or \textit{page\_data} table. Instead, we are linking the resources directly to the pages where they occurred. For example, if there had been an image linked to a page with \texttt{id = 1}, we enter an image entry with a reference to the page with \texttt{id = 1}.
 
 \section{Crawler implementation}
+
 The development process of the crawler was done in multiple iterations. In the first iteration, we developed all the required utilities to build the crawler upon. These utilities include: URL-canonicalization, \texttt{SiteMap} parsing, \texttt{robots.txt} parsing, database service to store the obtained data. Furthermore, we developed the core concepts, and the basic pipeline of how the crawler should interact with the frontier and the database. Finally, we created workers which are going to perform the crawling.
 
+There are two versions of the crawler workers. First, we tried a naive implementation in~\ref{subsec:jitter} with jittered time between the requests to the same domain, which didn't turn out well. Next, we developed a more advanced version of the worker in~\ref{subsec:bf}, which implements a distributed breadth-first approach.
+
 \subsection{Core concepts}
-The following steps describe the process of fetching and storing the data retrieved from a given URL.
+
+The following steps describe the process of fetching and storing the data retrieved from a given URL. Whenever we refer to processing of a page, we are referring to the following steps:
 \begin{enumerate}
 	\item frontier dequeueing - get the next page from the frontier
 	\item \texttt{robots.txt} check - check whether the page is allowed in the \texttt{robots.txt}, skip it if not. If the \texttt{robots.txt} is missing - allow it by default
@@ -89,26 +97,39 @@ The following steps describe the process of fetching and storing the data retrie
 	\item repeat the process for the rest of the entries
 \end{enumerate}
 
-\subsection{Version 1 - jittered delay}
+\subsection{Version 1 - Jittered Delay} \label{subsec:jitter}
 
-Figure~\ref{fig:1}
+Our naive approach is consisted of having multiple workers, which are reading from the frontier and processing the upcoming page. Each of the workers are spawned with a $5s$ jittered delay, where the jittering is in the range from $2$ to $20$ seconds.
 
+We introduced the jitter in order to reduce the probability of having the crawler processing a page from the same domain. Unfortunately, since the crawler is working in a breadth-first manner, it is highly unlikely to have two sequential pages from two different domains.
 
-\subsection{Version 2 - Distributed BF}
-Figure~\ref{fig:2}
+Since we are limited to a single host machine, which has a single IP address, it would mean that we need to synchronise all threads and have a semaphore which will determine the delay between the requests.
 
+The low level of concurrency would effectively mean that the multi-threading is not as effective as it could be if the concurrency was independent among the threads. Which lead us to the better approach, described in the section below. We illustrated our approach is illustrated in Figure~\ref{fig:1}.
+
+\subsection{Version 2 - Distributed Breadth-First} \label{subsec:bf}
+
+To take full advantage of the concurrency we decided to distribute the frontier among the pool of workers. The distribution is done such that each worker is in charge of a single domain - a \textit{Domain Worker}, with the assumption that each of the domains has its own server. We illustrate this approach in Figure~\ref{fig:2}.
+
+To achieve the distribution, we introduced a special kind of worker which we call a \textit{Frontier Manager}. Its purpose is to orchestrate the \textit{domain workers} and route the workload to each of the workers. 
+
+By orchestration, we mean that the \textit{Frontier Manager} has the permission to spawn new workers, if there are more domains available than workers currently. Another very important task it has is to pick a new domain for the worker which has finished processing a given domain. This is a crucial task, as it keeps all of the resources at full capacity and therefore it can maximize the number of pages it processes in a given time period.
+
+Additionally, the \textit{Frontier Manager} reroutes all the obtained links to the correct worker's frontier to be processed. If the given domain is currently inactive, then it keeps the pages in memory until it is chosen to be processed, when forwards them to the worker, and it resets the local state.
+
+The \textit{Domain Worker} is checking its status every $15s$ and if the local frontier is empty, it sends a signal to the \textit{Frontier Manager} to get a new domain to process next. The delayed time between subsequent requests to the targetted server is not wasted by the worker, as it uses that time to enqueue all the incoming links from the \textit{Frontier Manager}, and to check its own status (this is implemented as a message to the standard output), and to act accordingly.
 
 \begin{figure}
 	\begin{minipage}{0.45\textwidth}
 		\centering
 		\includegraphics[width=0.9\textwidth]{jittered-delay.png}
-		\caption{V1.}
+		\caption{v.1.0 of the worker with a simultaneous access to the global frontier.}
 		\label{fig:1}
 	\end{minipage}\hfill
 	\begin{minipage}{0.45\textwidth}
 		\centering
 		\includegraphics[width=0.9\textwidth]{frontier-manager.png}
-		\caption{V2.}
+		\caption{v2.0 of the worker with a \textit{Frontier Manager} which delegates the workload.}
 		\label{fig:2}
 \end{minipage}
 \end{figure}
