@@ -3,7 +3,10 @@
 \usepackage{geometry}
 \usepackage{graphicx}
 \usepackage{url,hyperref}
+\usepackage{array}
+
 \hypersetup{colorlinks,citecolor=red,urlcolor=blue} 
+\newcolumntype{P}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
 \title{
 	Web Information Extraction and Retrieval\\
@@ -137,10 +140,50 @@ The \textit{Domain Worker} is checking its status every $15s$ and if the local f
 
 \section{Data Analysis}
 
-\subsection{Experiment 1 - Pages only with initial seed}
-\subsection{Experiment 2 - Provided seed all data}
-\subsection{Experiment 3 - Extended seed all data}
-binary data is ignored completely
+\subsection{Experiment 1 - Provided seed all data}
+\subsection{Experiment 2 - Extended seed all data}
+~\ref{tab:1}
+
+\begin{table}[hbt!]
+	\centering
+		\begin{tabular}{P{0.15\linewidth}|c|c}
+			& Original seed & Extended seed \\ \hline
+			running time [min] & 618 & 686  \\ \hline
+			avg wait time [min] & 111.057 & 119.629 \\ \hline
+			avg load time [ms] & 1351.347 & 1759.769 \\ \hline
+			sites      & 288 & 327 \\ \hline
+			pages      & 38268 & 58060 \\ \hline
+			duplicates & 971 & 1766 \\ \hline
+			links & 1585648 & 2569510 \\ \hline
+			images     & 94368 & 187924 \\ \hline
+			avg images  per page  & 6.3567 & 8.520 \\ \hline
+			duplicate images & 64638 & 155277 \\ \hline
+			data       & 28721 & 44761 \\ \hline
+			avg data  per page    & 4.9853 & 6.170 \\ \hline
+			duplicate data &11688 & 12593\\ \hline
+			doc & 32 & 226 \\ \hline
+			docx & 2 & 132 \\ \hline
+			pdf & 230 & 941 \\ \hline
+		\end{tabular}
+	\caption{General statistics}
+	\label{tab:1}
+\end{table}
+
+\begin{figure}
+	\begin{minipage}{0.45\textwidth}
+		\centering
+		\includegraphics[width=0.9\textwidth]{load_time.png}
+		\caption{Load time.}
+		\label{fig:3}
+	\end{minipage}\hfill
+	\begin{minipage}{0.45\textwidth}
+		\centering
+		\includegraphics[width=0.9\textwidth]{queue_wait_time.png}
+		\caption{Queue wait time.}
+		\label{fig:4}
+	\end{minipage}
+\end{figure}
+
 \section{Conclusion}
 
 % SELECT count(*), clock_timestamp() FROM page;
