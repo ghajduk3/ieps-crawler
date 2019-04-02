@@ -61,17 +61,22 @@ class DomainWorkerActor(
       context.stop(self)
 
     case ProcessDomain(site, initialUrls, download) =>
-      logger.info(s"$logInstanceIdentifier got a new domain: ${site.domain.get}")
-      logInstanceIdentifier = s"Worker_$workerId (${site.domain.get}):"
-      currentSite = Some(new SiteRobotsTxt(site))
-      queue.enqueueAll(List(QueuePageEntry(PageRow(
-        id = -1,
-        siteId = Some(site.id),
-        url = Canonical.getCanonical(site.domain.get),
-        storedTime = Some(DateTime.now(DateTimeZone.UTC))
-      ))) ++ initialUrls)
-      downloadData = download
-      self ! ProcessNextPage
+      if(site.domain.isEmpty) {
+        logger.error(s"$logInstanceIdentifier undefined domain")
+        context.parent ! NewDomainRequest
+      } else {
+        logger.info(s"$logInstanceIdentifier got a new domain: ${site.domain.get}")
+        logInstanceIdentifier = s"Worker_$workerId (${site.domain.get}):"
+        currentSite = Some(new SiteRobotsTxt(site))
+        queue.enqueueAll(List(QueuePageEntry(PageRow(
+          id = -1,
+          siteId = Some(site.id),
+          url = Canonical.getCanonical(site.domain.get),
+          storedTime = Some(DateTime.now(DateTimeZone.UTC))
+        ))) ++ initialUrls)
+        downloadData = download
+        self ! ProcessNextPage
+      }
 
     case StatusRequest =>
       val site = currentSite.map(_.site)
@@ -82,7 +87,7 @@ class DomainWorkerActor(
         case Some(site) =>
           logger.info(s"$logInstanceIdentifier Status report: domain: ${site.domain.get}, waiting: $isWaiting, download: $downloadData, queue size: ${queue.size()}")
           if (queue.isEmpty) {
-            logger.info(s"Requesting new domain")
+            logger.info(s"$logInstanceIdentifier Requesting new domain")
             context.parent ! NewDomainRequest(site)
           }
         case None =>

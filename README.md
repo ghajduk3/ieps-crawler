@@ -1,5 +1,7 @@
 # WIER: Crawler implementation
 
+**IMPORTANT: THE `report.pdf` FILE IN THE ROOT OF THE REPOSITORY IS SOFT-LINKED TO `report/report.pdf`**
+
 ## Brief description
 This is an implementation of a [web-crawler](https://en.wikipedia.org/wiki/Web_crawler) written in [Scala](https://www.scala-lang.org/).
 
@@ -15,10 +17,10 @@ In order to run the code you need to:
 1. A local instance of `PostgreSQL` database needs to be set up:
     1. Have the _modified_ `crawldb.sql` imported into a database called _crawldb_
     2. Have a user `postgres` with no password (default user)
-2. Make sure to have `sbt` [installed](https://www.scala-sbt.org/0.13/docs/Setup.html) on the machine where the code will be running
+2. Make sure that `sbt` [installed](https://www.scala-sbt.org/0.13/docs/Setup.html) is installed on the machine where the code will be running
 3. Make sure that a `queue` directory exists within the working directory of the executable. (If you are running everything from the root directory you should be fine.)
 
-NOTE: The script provided in the repository is required to run the code.
+NOTE: The script provided in the repository is required to run the code because the database models which the code relies upon are generated on compile time.
 
 NOTE: To change the specifics about the database name, username and password, please modify the `local` configuration in [application.conf](./src/main/resources/application.conf).
 
